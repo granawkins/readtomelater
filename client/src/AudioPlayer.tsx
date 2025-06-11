@@ -1,12 +1,21 @@
 import { useAudioPlayer } from 'react-use-audio-player';
 import { useEffect, useRef, useState } from 'react';
 
+interface AudioChunk {
+  index: number;
+  audioPath: string;
+  audioHash: string;
+  startIndex: number;
+  endIndex: number;
+  textLength: number;
+}
+
 interface AudioPlayerProps {
-  src: string;
+  audioChunks: AudioChunk[];
   title?: string;
 }
 
-const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
+const AudioPlayer = ({ audioChunks, title }: AudioPlayerProps) => {
   const {
     load,
     play,
@@ -21,28 +30,84 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
   const [loadError, setLoadError] = useState<string>('');
   const getPositionInterval = useRef<NodeJS.Timeout | null>(null);
   const [position, setPosition] = useState(0);
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
+  const [chunkDurations, setChunkDurations] = useState<number[]>([]);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const [overallPosition, setOverallPosition] = useState(0);
 
+  // Load the current chunk
   useEffect(() => {
-    if (src) {
+    if (audioChunks.length > 0 && currentChunkIndex < audioChunks.length) {
+      const currentChunk = audioChunks[currentChunkIndex];
       try {
-        load(src, {
+        load(currentChunk.audioPath, {
           onload: () => {
-            console.log('Audio loaded successfully');
+            console.log(`Chunk ${currentChunkIndex} loaded successfully`);
+
+            // Update chunk duration when loaded
+            const newDurations = [...chunkDurations];
+            newDurations[currentChunkIndex] = duration;
+            setChunkDurations(newDurations);
+
+            // Calculate total duration when we have all chunk durations
+            if (
+              newDurations.length === audioChunks.length &&
+              newDurations.every((d) => d > 0)
+            ) {
+              setTotalDuration(newDurations.reduce((sum, d) => sum + d, 0));
+            }
+
+            if (getPositionInterval.current) {
+              clearInterval(getPositionInterval.current);
+            }
             getPositionInterval.current = setInterval(() => {
-              setPosition(getPosition());
+              const currentPos = getPosition();
+              setPosition(currentPos);
+
+              // Calculate overall position
+              const previousChunksDuration = chunkDurations
+                .slice(0, currentChunkIndex)
+                .reduce((sum, d) => sum + d, 0);
+              setOverallPosition(previousChunksDuration + currentPos);
+
+              // Check if current chunk is finished
+              if (
+                currentPos >= duration - 0.1 &&
+                currentChunkIndex < audioChunks.length - 1
+              ) {
+                // Auto-advance to next chunk
+                setCurrentChunkIndex(currentChunkIndex + 1);
+              }
             }, 100);
+          },
+          onend: () => {
+            // Handle chunk end - advance to next chunk if available
+            if (currentChunkIndex < audioChunks.length - 1) {
+              setCurrentChunkIndex(currentChunkIndex + 1);
+            }
           },
         });
       } catch (error) {
         setLoadError(error as string);
       }
     }
+
     return () => {
       if (getPositionInterval.current) {
         clearInterval(getPositionInterval.current);
       }
     };
-  }, [src, load]);
+  }, [audioChunks, currentChunkIndex, load]);
+
+  // Auto-play when switching chunks if we were playing
+  useEffect(() => {
+    if (isPlaying && currentChunkIndex > 0) {
+      // Small delay to ensure chunk is loaded
+      setTimeout(() => {
+        play();
+      }, 100);
+    }
+  }, [currentChunkIndex]);
 
   const togglePlayPause = () => {
     if (isPlaying) {
@@ -53,18 +118,87 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPosition = parseFloat(e.target.value);
-    seek(newPosition);
+    const newOverallPosition = parseFloat(e.target.value);
+
+    // Find which chunk this position belongs to
+    let cumulativeTime = 0;
+    let targetChunk = 0;
+    let positionInChunk = newOverallPosition;
+
+    for (let i = 0; i < chunkDurations.length; i++) {
+      if (cumulativeTime + chunkDurations[i] >= newOverallPosition) {
+        targetChunk = i;
+        positionInChunk = newOverallPosition - cumulativeTime;
+        break;
+      }
+      cumulativeTime += chunkDurations[i];
+    }
+
+    // If we need to switch chunks
+    if (targetChunk !== currentChunkIndex) {
+      setCurrentChunkIndex(targetChunk);
+      // Will seek after chunk loads
+      setTimeout(() => {
+        seek(positionInChunk);
+      }, 200);
+    } else {
+      // Same chunk, just seek
+      seek(positionInChunk);
+    }
   };
 
   const skipForward = () => {
-    const newPosition = Math.min(position + 15, duration);
-    seek(newPosition);
+    const newOverallPosition = Math.min(overallPosition + 15, totalDuration);
+
+    // Find which chunk this position belongs to
+    let cumulativeTime = 0;
+    let targetChunk = 0;
+    let positionInChunk = newOverallPosition;
+
+    for (let i = 0; i < chunkDurations.length; i++) {
+      if (cumulativeTime + chunkDurations[i] >= newOverallPosition) {
+        targetChunk = i;
+        positionInChunk = newOverallPosition - cumulativeTime;
+        break;
+      }
+      cumulativeTime += chunkDurations[i];
+    }
+
+    if (targetChunk !== currentChunkIndex) {
+      setCurrentChunkIndex(targetChunk);
+      setTimeout(() => {
+        seek(positionInChunk);
+      }, 200);
+    } else {
+      seek(positionInChunk);
+    }
   };
 
   const skipBackward = () => {
-    const newPosition = Math.max(position - 15, 0);
-    seek(newPosition);
+    const newOverallPosition = Math.max(overallPosition - 15, 0);
+
+    // Find which chunk this position belongs to
+    let cumulativeTime = 0;
+    let targetChunk = 0;
+    let positionInChunk = newOverallPosition;
+
+    for (let i = 0; i < chunkDurations.length; i++) {
+      if (cumulativeTime + chunkDurations[i] >= newOverallPosition) {
+        targetChunk = i;
+        positionInChunk = newOverallPosition - cumulativeTime;
+        break;
+      }
+      cumulativeTime += chunkDurations[i];
+    }
+
+    if (targetChunk !== currentChunkIndex) {
+      setCurrentChunkIndex(targetChunk);
+      setTimeout(() => {
+        seek(positionInChunk);
+      }, 200);
+    } else {
+      seek(positionInChunk);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -74,7 +208,9 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progressPercentage = duration ? (position / duration) * 100 : 0;
+  const progressPercentage = totalDuration
+    ? (overallPosition / totalDuration) * 100
+    : 0;
 
   if (error || loadError) {
     return (
@@ -99,7 +235,7 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
         <>
           {/* Progress Bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {formatTime(position)}
+            {formatTime(overallPosition)}
             <div
               style={{
                 height: '6px',
@@ -119,8 +255,8 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
               <input
                 type="range"
                 min="0"
-                max={duration || 0}
-                value={getPosition()}
+                max={totalDuration || 0}
+                value={overallPosition}
                 onChange={handleSeek}
                 style={{
                   position: 'absolute',
@@ -133,8 +269,17 @@ const AudioPlayer = ({ src, title }: AudioPlayerProps) => {
                 }}
               />
             </div>
-            {formatTime(duration)}
+            {formatTime(totalDuration)}
           </div>
+
+          {/* Chunk indicator */}
+          {audioChunks.length > 1 && (
+            <div
+              style={{ fontSize: '0.8em', color: '#666', marginTop: '0.5rem' }}
+            >
+              Chunk {currentChunkIndex + 1} of {audioChunks.length}
+            </div>
+          )}
 
           {/* Controls */}
           <div>
