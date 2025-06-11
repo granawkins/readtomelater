@@ -82,6 +82,9 @@ export async function generate_audio(
   });
 
   // Process each chunk
+  let totalCharactersGenerated = 0;
+  let totalApiCalls = 0;
+
   for (let i = 0; i < textChunks.length; i++) {
     const chunkText = textChunks[i];
 
@@ -96,8 +99,15 @@ export async function generate_audio(
     // Check if file already exists
     if (existsSync(audioPath)) {
       fileExists = true;
+      console.log(
+        `🎵 Chunk ${i + 1}/${textChunks.length}: Using cached audio (${chunkText.length} chars)`
+      );
     } else {
       try {
+        console.log(
+          `🎵 Chunk ${i + 1}/${textChunks.length}: Generating audio (${chunkText.length} chars)...`
+        );
+
         // Generate audio using OpenAI
         const mp3 = await openai.audio.speech.create({
           model,
@@ -108,6 +118,17 @@ export async function generate_audio(
         // Save the audio file
         const buffer = Buffer.from(await mp3.arrayBuffer());
         await Bun.write(audioPath, buffer);
+
+        totalCharactersGenerated += chunkText.length;
+        totalApiCalls++;
+
+        // Calculate cost estimate (approximate TTS pricing)
+        const costPerCharacter = model === 'tts-1-hd' ? 0.00003 : 0.000015; // $0.030 or $0.015 per 1K chars
+        const chunkCost = (chunkText.length / 1000) * costPerCharacter;
+
+        console.log(
+          `✅ Chunk ${i + 1} generated - Cost: ~$${chunkCost.toFixed(4)}`
+        );
       } catch (error) {
         throw new Error(
           `Failed to generate audio for chunk ${i}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -122,6 +143,19 @@ export async function generate_audio(
       chunkIndex: i,
       text: chunkText,
     });
+  }
+
+  // Log summary
+  if (totalApiCalls > 0) {
+    const totalCostEstimate =
+      (totalCharactersGenerated / 1000) * (model === 'tts-1-hd' ? 0.03 : 0.015);
+    console.log(
+      `📊 Summary: ${totalApiCalls} API calls, ${totalCharactersGenerated} characters, ~$${totalCostEstimate.toFixed(4)} total cost`
+    );
+  } else {
+    console.log(
+      `📊 Summary: All ${textChunks.length} chunks served from cache`
+    );
   }
 
   return {

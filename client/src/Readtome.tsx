@@ -26,10 +26,12 @@ const Readtome = () => {
   const [currentChunk, setCurrentChunk] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const [totalProgress, setTotalProgress] = useState(0); // Progress across all chunks
 
   const howlRef = useRef<Howl | null>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const chunkDurations = useRef<number[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,8 +83,19 @@ const Readtome = () => {
       html5: true, // Use HTML5 audio for better streaming
       rate: playbackRate,
       onload: () => {
-        setDuration(howl.duration());
-        updateMediaSession(chunk.text, chunkIndex);
+        const duration = howl.duration();
+        chunkDurations.current[chunkIndex] = duration;
+
+        // Calculate total duration when all chunks are loaded
+        if (
+          chunkDurations.current.filter((d) => d > 0).length ===
+          data.audioChunks.length
+        ) {
+          const total = chunkDurations.current.reduce((sum, d) => sum + d, 0);
+          setTotalDuration(total);
+        }
+
+        updateMediaSession(data.title, chunkIndex);
       },
       onplay: () => setIsPlaying(true),
       onpause: () => setIsPlaying(false),
@@ -101,21 +114,23 @@ const Readtome = () => {
     startProgressTracking();
   };
 
-  // Update Media Session for background playback
-  const updateMediaSession = (chunkText: string, chunkIndex: number) => {
+  // Update Media Session for background playbook
+  const updateMediaSession = (title: string, chunkIndex: number) => {
     if ('mediaSession' in navigator && data) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: data.title,
+        title: title,
         artist: 'Read To Me Later',
-        album: `Chunk ${chunkIndex + 1} of ${data.totalChunks}`,
+        album: 'Article Audio',
       });
 
       navigator.mediaSession.setActionHandler('play', () => play());
       navigator.mediaSession.setActionHandler('pause', () => pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () =>
-        previousChunk()
+      navigator.mediaSession.setActionHandler('seekbackward', () =>
+        seekRelative(-10)
       );
-      navigator.mediaSession.setActionHandler('nexttrack', () => nextChunk());
+      navigator.mediaSession.setActionHandler('seekforward', () =>
+        seekRelative(10)
+      );
     }
   };
 
@@ -127,7 +142,16 @@ const Readtome = () => {
 
     progressIntervalRef.current = setInterval(() => {
       if (howlRef.current && isPlaying) {
-        setProgress(howlRef.current.seek());
+        const currentSeek = howlRef.current.seek();
+        setProgress(currentSeek);
+
+        // Calculate total progress across all chunks
+        let totalProg = 0;
+        for (let i = 0; i < currentChunk; i++) {
+          totalProg += chunkDurations.current[i] || 0;
+        }
+        totalProg += currentSeek;
+        setTotalProgress(totalProg);
       }
     }, 100);
   };
@@ -167,16 +191,81 @@ const Readtome = () => {
     }
   };
 
-  const nextChunk = () => {
-    if (data && currentChunk < data.audioChunks.length - 1) {
-      setCurrentChunk(currentChunk + 1);
+  const seekRelative = (seconds: number) => {
+    const newTotalPosition = Math.max(
+      0,
+      Math.min(totalProgress + seconds, totalDuration)
+    );
+    seekToTotalPosition(newTotalPosition);
+  };
+
+  // Seek to position in total timeline (across all chunks)
+  const seekToTotalPosition = (totalPosition: number) => {
+    if (!data) return;
+
+    let accumulatedTime = 0;
+    let targetChunk = 0;
+    let positionInChunk = totalPosition;
+
+    // Find which chunk contains this position
+    for (let i = 0; i < data.audioChunks.length; i++) {
+      const chunkDuration = chunkDurations.current[i] || 0;
+      if (accumulatedTime + chunkDuration > totalPosition) {
+        targetChunk = i;
+        positionInChunk = totalPosition - accumulatedTime;
+        break;
+      }
+      accumulatedTime += chunkDuration;
+    }
+
+    // Switch to the target chunk if needed
+    if (targetChunk !== currentChunk) {
+      setCurrentChunk(targetChunk);
+      // The seek will happen after the chunk loads
+      setTimeout(() => {
+        if (howlRef.current) {
+          howlRef.current.seek(positionInChunk);
+          setProgress(positionInChunk);
+        }
+      }, 100);
+    } else {
+      // Same chunk, just seek
+      if (howlRef.current) {
+        howlRef.current.seek(positionInChunk);
+        setProgress(positionInChunk);
+      }
     }
   };
 
-  const previousChunk = () => {
-    if (currentChunk > 0) {
-      setCurrentChunk(currentChunk - 1);
-    }
+  // Preload all chunk durations for seeking
+  const preloadChunkDurations = () => {
+    if (!data) return;
+
+    data.audioChunks.forEach((chunk, index) => {
+      if (!chunkDurations.current[index]) {
+        const tempHowl = new Howl({
+          src: [chunk.audioPath],
+          html5: true,
+          preload: 'metadata',
+          onload: () => {
+            chunkDurations.current[index] = tempHowl.duration();
+            tempHowl.unload();
+
+            // Update total duration when all chunks are loaded
+            if (
+              chunkDurations.current.filter((d) => d > 0).length ===
+              data.audioChunks.length
+            ) {
+              const total = chunkDurations.current.reduce(
+                (sum, d) => sum + d,
+                0
+              );
+              setTotalDuration(total);
+            }
+          },
+        });
+      }
+    });
   };
 
   // Load chunk when currentChunk changes
@@ -185,6 +274,16 @@ const Readtome = () => {
       loadChunk(currentChunk);
     }
   }, [currentChunk, data]);
+
+  // Initialize chunk durations when data changes
+  useEffect(() => {
+    if (data && data.audioChunks.length > 0) {
+      chunkDurations.current = new Array(data.audioChunks.length).fill(0);
+      setCurrentChunk(0);
+      setTotalProgress(0);
+      preloadChunkDurations();
+    }
+  }, [data]);
 
   // Update playback rate when it changes
   useEffect(() => {
@@ -249,25 +348,16 @@ const Readtome = () => {
                   backgroundColor: '#f9f9f9',
                 }}
               >
-                {/* Chunk Info */}
-                <div
-                  style={{
-                    marginBottom: '10px',
-                    fontSize: '14px',
-                    color: '#666',
-                  }}
-                >
-                  Chunk {currentChunk + 1} of {data.totalChunks}
-                </div>
-
                 {/* Progress Bar */}
                 <div style={{ marginBottom: '15px' }}>
                   <input
                     type="range"
                     min="0"
-                    max={duration}
-                    value={progress}
-                    onChange={(e) => seek(Number(e.target.value))}
+                    max={totalDuration}
+                    value={totalProgress}
+                    onChange={(e) =>
+                      seekToTotalPosition(Number(e.target.value))
+                    }
                     style={{ width: '100%' }}
                   />
                   <div
@@ -278,8 +368,8 @@ const Readtome = () => {
                       color: '#666',
                     }}
                   >
-                    <span>{formatTime(progress)}</span>
-                    <span>{formatTime(duration)}</span>
+                    <span>{formatTime(totalProgress)}</span>
+                    <span>{formatTime(totalDuration)}</span>
                   </div>
                 </div>
 
@@ -294,11 +384,10 @@ const Readtome = () => {
                   }}
                 >
                   <button
-                    onClick={previousChunk}
-                    disabled={currentChunk === 0}
+                    onClick={() => seekRelative(-15)}
                     style={{ padding: '8px 12px' }}
                   >
-                    ⏮️ Prev
+                    ⏪ -15s
                   </button>
                   <button
                     onClick={togglePlayPause}
@@ -307,11 +396,10 @@ const Readtome = () => {
                     {isPlaying ? '⏸️ Pause' : '▶️ Play'}
                   </button>
                   <button
-                    onClick={nextChunk}
-                    disabled={currentChunk >= data.audioChunks.length - 1}
+                    onClick={() => seekRelative(15)}
                     style={{ padding: '8px 12px' }}
                   >
-                    Next ⏭️
+                    +15s ⏩
                   </button>
                 </div>
 
