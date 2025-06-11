@@ -149,7 +149,7 @@ export async function generate_audio(
       }
 
       segments.push({
-        segmentPath: `/api/audio/segment/${segmentHash}.mp3`,
+        segmentPath: `/audio/${segmentHash}.mp3`,
         segmentNumber: i,
         hash: segmentHash,
         fileExists,

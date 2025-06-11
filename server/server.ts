@@ -35,7 +35,7 @@ const server = Bun.serve({
               audioHash: 'test-hash',
               segments: [
                 {
-                  segmentPath: '/api/audio/segment/test.mp3',
+                  segmentPath: '/audio/test.mp3',
                   segmentNumber: 0,
                   hash: 'test-hash-0',
                   fileExists: true,
@@ -95,15 +95,16 @@ const server = Bun.serve({
       }
     }
 
-    // Serve audio segment files
+    // Serve static audio files directly
     if (
-      url.pathname.startsWith('/api/audio/segment/') &&
+      url.pathname.startsWith('/audio/') &&
       (req.method === 'GET' || req.method === 'HEAD')
     ) {
-      const filename = url.pathname.replace('/api/audio/segment/', '');
+      const filename = url.pathname.replace('/audio/', '');
       const audioPath = `./audio/${filename}`;
 
-      console.log(`Serving audio segment: ${filename}, path: ${audioPath}`);
+      console.log(`Serving audio file: ${filename}, path: ${audioPath}`);
+      console.log(`Current working directory: ${process.cwd()}`);
 
       try {
         const file = Bun.file(audioPath);
@@ -114,18 +115,17 @@ const server = Bun.serve({
           return new Response(file, {
             headers: {
               'Content-Type': 'audio/mpeg',
-              'Content-Disposition': `inline; filename="${filename}"`,
               'Accept-Ranges': 'bytes',
               'Cache-Control': 'public, max-age=31536000',
             },
           });
         } else {
           console.log(`File not found: ${audioPath}`);
-          return new Response('Audio segment not found', { status: 404 });
+          return new Response('Audio file not found', { status: 404 });
         }
       } catch (error) {
-        console.error(`Error serving audio segment: ${error}`);
-        return new Response('Error serving audio segment', { status: 500 });
+        console.error(`Error serving audio file: ${error}`);
+        return new Response('Error serving audio file', { status: 500 });
       }
     }
 
