@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 const Readability = () => {
   const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,8 +20,10 @@ const Readability = () => {
         body: JSON.stringify({ url }),
       });
       const data = await response.json();
+      setTitle(data.title || 'No title found');
       setContent(data.content || 'No content extracted');
     } catch (error) {
+      setTitle('Error');
       setContent('Error extracting content');
     } finally {
       setLoading(false);
@@ -42,9 +45,20 @@ const Readability = () => {
           {loading ? 'Loading...' : 'Submit'}
         </button>
       </form>
-      <div style={{ marginTop: '20px', whiteSpace: 'pre-wrap' }}>
-        {content}
-      </div>
+      {title && (
+        <div style={{ marginTop: '20px' }}>
+          <h3>Title:</h3>
+          <p><strong>{title}</strong></p>
+        </div>
+      )}
+      {content && (
+        <div style={{ marginTop: '20px' }}>
+          <h3>Content:</h3>
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {content}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
