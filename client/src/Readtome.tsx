@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import AudioPlayer from './AudioPlayer';
+import StreamingAudioPlayer from './StreamingAudioPlayer';
+
+interface AudioSegment {
+  segmentPath: string;
+  segmentNumber: number;
+  hash: string;
+  fileExists: boolean;
+}
 
 const Readtome = () => {
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [audioPath, setAudioPath] = useState('');
+  const [segments, setSegments] = useState<AudioSegment[]>([]);
+  const [totalSegments, setTotalSegments] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,11 +32,13 @@ const Readtome = () => {
       const data = await response.json();
       setTitle(data.title || 'No title found');
       setContent(data.content || 'No content extracted');
-      setAudioPath(data.audioPath || '');
+      setSegments(data.segments || []);
+      setTotalSegments(data.totalSegments || 0);
     } catch {
       setTitle('Error');
       setContent('Error extracting content');
-      setAudioPath('');
+      setSegments([]);
+      setTotalSegments(0);
     } finally {
       setLoading(false);
     }
@@ -57,10 +67,10 @@ const Readtome = () => {
           </p>
         </div>
       )}
-      {audioPath && (
+      {segments.length > 0 && (
         <div style={{ marginTop: '20px' }}>
           <h3>Audio:</h3>
-          <AudioPlayer src={audioPath} title={title} />
+          <StreamingAudioPlayer segments={segments} title={title} />
         </div>
       )}
       {content && (

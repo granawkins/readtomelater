@@ -2,17 +2,55 @@ import { createHash } from 'crypto';
 import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import OpenAI from 'openai';
+import { openaiLogger } from './openai_logger';
 
 export interface GenerateAudioOptions {
   voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
   model?: 'tts-1' | 'tts-1-hd' | 'gpt-4o-mini-tts';
   audioDir?: string;
+  chunkSize?: number;
+}
+
+export interface AudioSegment {
+  segmentPath: string;
+  segmentNumber: number;
+  hash: string;
+  fileExists: boolean;
 }
 
 export interface GenerateAudioResult {
-  audioPath: string;
   hash: string;
-  fileExists: boolean;
+  segments: AudioSegment[];
+  totalSegments: number;
+}
+
+function splitTextIntoChunks(
+  text: string,
+  maxChunkSize: number = 4000
+): string[] {
+  const chunks: string[] = [];
+  const sentences = text.split(/[.!?]+\s+/);
+
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    const potentialChunk = currentChunk + (currentChunk ? '. ' : '') + sentence;
+
+    if (potentialChunk.length <= maxChunkSize) {
+      currentChunk = potentialChunk;
+    } else {
+      if (currentChunk) {
+        chunks.push(currentChunk + '.');
+      }
+      currentChunk = sentence;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk + (currentChunk.endsWith('.') ? '' : '.'));
+  }
+
+  return chunks.filter((chunk) => chunk.length > 0);
 }
 
 export async function generate_audio(
@@ -23,47 +61,105 @@ export async function generate_audio(
     voice = 'alloy',
     model = 'gpt-4o-mini-tts',
     audioDir = './audio',
+    chunkSize = 4000,
   } = options;
 
-  // Create hash of the text for filename
+  // Create hash of the full text for the session
   const hash = createHash('sha256').update(text).digest('hex');
-  const audioPath = `${audioDir}/${hash}.mp3`;
 
   // Ensure audio directory exists
   if (!existsSync(audioDir)) {
     await mkdir(audioDir, { recursive: true });
   }
 
-  // Check if file already exists
-  if (existsSync(audioPath)) {
-    return {
-      audioPath,
-      hash,
-      fileExists: true,
-    };
-  }
+  // Split text into chunks
+  const textChunks = splitTextIntoChunks(text, chunkSize);
+  const segments: AudioSegment[] = [];
+
+  // Create OpenAI client lazily to allow for testing without API key
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
 
   try {
-    // Create OpenAI client lazily to allow for testing without API key
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // Generate audio for each chunk
+    for (let i = 0; i < textChunks.length; i++) {
+      const chunk = textChunks[i];
+      const segmentHash = createHash('sha256')
+        .update(`${hash}-${i}`)
+        .digest('hex');
+      const segmentPath = `${audioDir}/${segmentHash}.mp3`;
 
-    // Generate audio using OpenAI
-    const mp3 = await openai.audio.speech.create({
-      model,
-      voice,
-      input: text,
-    });
+      let fileExists = false;
 
-    // Save the audio file
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    await Bun.write(audioPath, buffer);
+      // Check if segment already exists
+      if (existsSync(segmentPath)) {
+        fileExists = true;
+        console.log(
+          `Segment ${i + 1}/${textChunks.length} already exists, skipping OpenAI request`
+        );
+      } else {
+        const startTime = Date.now();
+        let requestSuccess = false;
+        let errorMessage: string | undefined;
+
+        try {
+          console.log(
+            `Generating audio for segment ${i + 1}/${textChunks.length} (${chunk.length} chars)`
+          );
+
+          // Generate audio for this chunk
+          const mp3 = await openai.audio.speech.create({
+            model,
+            voice,
+            input: chunk,
+          });
+
+          // Save the audio segment
+          const buffer = Buffer.from(await mp3.arrayBuffer());
+          await Bun.write(segmentPath, buffer);
+
+          requestSuccess = true;
+          console.log(
+            `Segment ${i + 1}/${textChunks.length} generated successfully`
+          );
+        } catch (segmentError) {
+          errorMessage =
+            segmentError instanceof Error
+              ? segmentError.message
+              : 'Unknown error';
+          console.error(`Failed to generate segment ${i + 1}:`, errorMessage);
+          throw segmentError;
+        } finally {
+          // Log the request
+          const responseTime = Date.now() - startTime;
+          await openaiLogger.logComplete(
+            `${hash}-${i}`,
+            model,
+            voice,
+            chunk,
+            hash,
+            requestSuccess,
+            responseTime,
+            i,
+            textChunks.length,
+            errorMessage
+          );
+        }
+      }
+
+      segments.push({
+        segmentPath: `/api/audio/segment/${segmentHash}.mp3`,
+        segmentNumber: i,
+        hash: segmentHash,
+        fileExists,
+      });
+    }
 
     return {
-      audioPath,
       hash,
-      fileExists: false,
+      segments,
+      totalSegments: textChunks.length,
     };
   } catch (error) {
     throw new Error(
