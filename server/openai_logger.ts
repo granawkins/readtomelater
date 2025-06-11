@@ -1,4 +1,4 @@
-import { writeFile, appendFile, mkdir } from 'fs/promises';
+import { appendFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 
 interface OpenAIRequest {
@@ -49,32 +49,22 @@ export class OpenAILogger {
   }
 
   async logRequest(
-    model: string,
-    voice: string,
-    inputText: string,
-    sessionHash: string,
-    segmentNumber?: number,
-    totalSegments?: number
+    _model: string,
+    _voice: string,
+    _inputText: string,
+    _sessionHash: string,
+    _segmentNumber?: number,
+    _totalSegments?: number
   ): Promise<string> {
     const requestId = this.generateRequestId();
     const startTime = Date.now();
 
-    const logEntry: Partial<OpenAIRequest> = {
-      timestamp: new Date().toISOString(),
-      requestId,
-      model,
-      voice,
-      inputLength: inputText.length,
-      estimatedCost: this.calculateCost(model, inputText.length),
-      segmentNumber,
-      totalSegments,
-      sessionHash,
-      success: false,
-    };
-
     // Store start time for response time calculation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__openai_start_times =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (globalThis as any).__openai_start_times || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__openai_start_times[requestId] = startTime;
 
     return requestId;
@@ -88,25 +78,29 @@ export class OpenAILogger {
     await this.ensureLogDir();
 
     const startTime =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (globalThis as any).__openai_start_times?.[requestId] || Date.now();
     const responseTimeMs = Date.now() - startTime;
 
     // Clean up the start time
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((globalThis as any).__openai_start_times) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (globalThis as any).__openai_start_times[requestId];
     }
 
-    // Read the existing log to find and update the request
-    const logEntry = {
-      requestId,
-      success,
-      errorMessage,
-      responseTimeMs,
-      completedAt: new Date().toISOString(),
-    };
-
     // For simplicity, we'll append the completion info
-    await appendFile(this.logFile, JSON.stringify(logEntry) + '\n', 'utf8');
+    await appendFile(
+      this.logFile,
+      JSON.stringify({
+        requestId,
+        success,
+        errorMessage,
+        responseTimeMs,
+        completedAt: new Date().toISOString(),
+      }) + '\n',
+      'utf8'
+    );
   }
 
   async logComplete(

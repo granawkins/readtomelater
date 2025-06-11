@@ -13,7 +13,6 @@ const Readtome = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [segments, setSegments] = useState<AudioSegment[]>([]);
-  const [totalSegments, setTotalSegments] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,12 +32,10 @@ const Readtome = () => {
       setTitle(data.title || 'No title found');
       setContent(data.content || 'No content extracted');
       setSegments(data.segments || []);
-      setTotalSegments(data.totalSegments || 0);
     } catch {
       setTitle('Error');
       setContent('Error extracting content');
       setSegments([]);
-      setTotalSegments(0);
     } finally {
       setLoading(false);
     }

@@ -61,9 +61,7 @@ describe('generate_audio', () => {
     const firstSegment = result.segments[0];
     expect(firstSegment.segmentNumber).toBe(0);
     expect(firstSegment.hash).toBeString();
-    expect(firstSegment.segmentPath).toMatch(
-      /^\/api\/audio\/segment\/[a-f0-9]{64}\.mp3$/
-    );
+    expect(firstSegment.segmentPath).toMatch(/^\/audio\/[a-f0-9]{64}\.mp3$/);
     expect(firstSegment.fileExists).toBe(false);
 
     // Verify the actual file exists in the temp directory
@@ -124,9 +122,7 @@ describe('generate_audio', () => {
     // Check that segments are numbered correctly
     result.segments.forEach((segment, index) => {
       expect(segment.segmentNumber).toBe(index);
-      expect(segment.segmentPath).toMatch(
-        /^\/api\/audio\/segment\/[a-f0-9]{64}\.mp3$/
-      );
+      expect(segment.segmentPath).toMatch(/^\/audio\/[a-f0-9]{64}\.mp3$/);
 
       // Verify the actual file exists
       const segmentFilename = segment.segmentPath.split('/').pop();

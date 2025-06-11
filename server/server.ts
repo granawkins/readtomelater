@@ -87,7 +87,7 @@ const server = Bun.serve({
         return new Response(JSON.stringify(stats), {
           headers: { 'Content-Type': 'application/json' },
         });
-      } catch (error) {
+      } catch {
         return new Response(JSON.stringify({ error: 'Failed to get stats' }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
