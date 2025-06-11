@@ -23,18 +23,28 @@ const server = Bun.serve({
         }
 
         const result = await parse_url(targetUrl);
-        // Limit text to 4096 characters for OpenAI TTS API
-        const textForAudio = result.body.slice(0, 4096);
-        const audioResult = await generate_audio(textForAudio, {
+        const audioResult = await generate_audio(result.body, {
           audioDir: './audio',
         });
+
+        // Convert chunks to frontend format
+        const audioChunks = audioResult.chunks.map((chunk) => ({
+          audioPath: `/api/audio/${chunk.hash}.mp3`,
+          hash: chunk.hash,
+          chunkIndex: chunk.chunkIndex,
+          text: chunk.text,
+        }));
 
         return new Response(
           JSON.stringify({
             title: result.title,
             content: result.body,
-            audioPath: `/api/audio/${audioResult.hash}.mp3`,
-            audioHash: audioResult.hash,
+            audioChunks,
+            totalChunks: audioResult.totalChunks,
+            totalLength: audioResult.totalLength,
+            // Keep legacy fields for now
+            audioPath: audioChunks[0]?.audioPath || '',
+            audioHash: audioChunks[0]?.hash || '',
           }),
           {
             headers: { 'Content-Type': 'application/json' },

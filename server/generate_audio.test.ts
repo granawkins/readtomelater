@@ -44,14 +44,21 @@ describe('generate_audio', () => {
 
     const result = await generate_audio(testText, { audioDir: tempDir });
 
-    expect(result.hash).toBeString();
-    expect(result.audioPath).toMatch(
+    expect(result.chunks).toHaveLength(1);
+    expect(result.totalChunks).toBe(1);
+    expect(result.totalLength).toBe(testText.length);
+
+    const chunk = result.chunks[0];
+    expect(chunk.hash).toBeString();
+    expect(chunk.audioPath).toMatch(
       new RegExp(
         `^${tempDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[a-f0-9]{64}\\.mp3$`
       )
     );
-    expect(result.fileExists).toBe(false);
-    expect(existsSync(result.audioPath)).toBe(true);
+    expect(chunk.fileExists).toBe(false);
+    expect(chunk.chunkIndex).toBe(0);
+    expect(chunk.text).toBe(testText);
+    expect(existsSync(chunk.audioPath)).toBe(true);
   });
 
   it('should return existing file if hash matches', async () => {
@@ -59,13 +66,13 @@ describe('generate_audio', () => {
 
     // First call creates the file
     const result1 = await generate_audio(testText, { audioDir: tempDir });
-    expect(result1.fileExists).toBe(false);
+    expect(result1.chunks[0].fileExists).toBe(false);
 
     // Second call should return existing file
     const result2 = await generate_audio(testText, { audioDir: tempDir });
-    expect(result2.fileExists).toBe(true);
-    expect(result2.hash).toBe(result1.hash);
-    expect(result2.audioPath).toBe(result1.audioPath);
+    expect(result2.chunks[0].fileExists).toBe(true);
+    expect(result2.chunks[0].hash).toBe(result1.chunks[0].hash);
+    expect(result2.chunks[0].audioPath).toBe(result1.chunks[0].audioPath);
   });
 
   it('should handle different voice options', async () => {
@@ -77,7 +84,30 @@ describe('generate_audio', () => {
       audioDir: tempDir,
     });
 
-    expect(result.hash).toBeString();
-    expect(existsSync(result.audioPath)).toBe(true);
+    expect(result.chunks[0].hash).toBeString();
+    expect(existsSync(result.chunks[0].audioPath)).toBe(true);
+  });
+
+  it('should split long text into multiple chunks', async () => {
+    const longText = 'A'.repeat(10000); // 10k characters
+
+    const result = await generate_audio(longText, {
+      audioDir: tempDir,
+      chunkSize: 4000,
+    });
+
+    expect(result.totalChunks).toBeGreaterThan(1);
+    expect(result.chunks).toHaveLength(result.totalChunks);
+    expect(result.totalLength).toBe(longText.length);
+
+    // Check that all chunks have sequential indices
+    result.chunks.forEach((chunk, index) => {
+      expect(chunk.chunkIndex).toBe(index);
+      expect(existsSync(chunk.audioPath)).toBe(true);
+    });
+
+    // Check that combined text equals original
+    const combinedText = result.chunks.map((c) => c.text).join('');
+    expect(combinedText).toBe(longText);
   });
 });
