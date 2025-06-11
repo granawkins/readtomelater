@@ -23,8 +23,10 @@ const server = Bun.serve({
         }
 
         const result = await parse_url(targetUrl);
-        const audioResult = await generate_audio(result.body, {
-          audioDir: './server/audio'
+        // Limit text to 4096 characters for OpenAI TTS API
+        const textForAudio = result.body.slice(0, 4096);
+        const audioResult = await generate_audio(textForAudio, {
+          audioDir: './audio',
         });
 
         return new Response(
@@ -40,8 +42,8 @@ const server = Bun.serve({
         );
       } catch (error) {
         return new Response(
-          JSON.stringify({ 
-            error: `Failed to process URL: ${error instanceof Error ? error.message : 'Unknown error'}` 
+          JSON.stringify({
+            error: `Failed to process URL: ${error instanceof Error ? error.message : 'Unknown error'}`,
           }),
           {
             status: 500,
@@ -54,8 +56,8 @@ const server = Bun.serve({
     // Serve audio files
     if (url.pathname.startsWith('/api/audio/') && req.method === 'GET') {
       const filename = url.pathname.replace('/api/audio/', '');
-      const audioPath = `./server/audio/${filename}`;
-      
+      const audioPath = `./audio/${filename}`;
+
       try {
         const file = Bun.file(audioPath);
         if (await file.exists()) {

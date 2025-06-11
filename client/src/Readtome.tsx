@@ -68,7 +68,15 @@ const Readtome = () => {
       {content && (
         <div style={{ marginTop: '20px' }}>
           <h3>Content:</h3>
-          <div style={{ whiteSpace: 'pre-wrap', maxHeight: '400px', overflow: 'auto', border: '1px solid #ccc', padding: '10px' }}>
+          <div
+            style={{
+              whiteSpace: 'pre-wrap',
+              maxHeight: '400px',
+              overflow: 'auto',
+              border: '1px solid #ccc',
+              padding: '10px',
+            }}
+          >
             {content}
           </div>
         </div>
