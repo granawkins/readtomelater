@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 
 export interface GenerateAudioOptions {
   voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
-  model?: 'tts-1' | 'tts-1-hd';
+  model?: 'tts-1' | 'tts-1-hd' | 'gpt-4o-mini-tts';
   audioDir?: string;
 }
 
@@ -19,7 +19,11 @@ export async function generate_audio(
   text: string,
   options: GenerateAudioOptions = {}
 ): Promise<GenerateAudioResult> {
-  const { voice = 'alloy', model = 'tts-1', audioDir = './audio' } = options;
+  const {
+    voice = 'alloy',
+    model = 'gpt-4o-mini-tts',
+    audioDir = './audio',
+  } = options;
 
   // Create hash of the text for filename
   const hash = createHash('sha256').update(text).digest('hex');
