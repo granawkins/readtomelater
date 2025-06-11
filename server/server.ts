@@ -1,5 +1,4 @@
-import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
+import { parse_url } from './parse_url';
 
 const server = Bun.serve({
   port: 3000,
@@ -22,29 +21,11 @@ const server = Bun.serve({
           });
         }
 
-        // Fetch the HTML content
-        const response = await fetch(targetUrl);
-        const html = await response.text();
-
-        // Parse with JSDOM
-        const dom = new JSDOM(html, { url: targetUrl });
-        const document = dom.window.document;
-
-        // Extract readable content with Readability
-        const reader = new Readability(document);
-        const article = reader.parse();
-
-        if (!article) {
-          return new Response(JSON.stringify({ error: 'Could not parse article' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
+        const result = await parse_url(targetUrl);
 
         return new Response(JSON.stringify({
-          title: article.title,
-          content: article.textContent,
-          excerpt: article.excerpt,
+          title: result.title,
+          content: result.body,
         }), {
           headers: { 'Content-Type': 'application/json' },
         });
