@@ -194,13 +194,29 @@ const Readtome = () => {
   const seek = (position: number) => {
     if (howlRef.current) {
       console.log(`Direct seek called with position: ${position}s`);
+      const wasPlaying = howlRef.current.playing();
       console.log(
-        `Howl state: playing=${howlRef.current.playing()}, duration=${howlRef.current.duration()}, current_seek=${howlRef.current.seek()}`
+        `Howl state: playing=${wasPlaying}, duration=${howlRef.current.duration()}, current_seek=${howlRef.current.seek()}`
       );
+
+      // Pause if playing, seek, then resume if needed
+      if (wasPlaying) {
+        howlRef.current.pause();
+        console.log('Paused for direct seeking');
+      }
 
       const result = howlRef.current.seek(position);
       console.log(`Seek result:`, result);
       console.log(`New seek position:`, howlRef.current.seek());
+
+      if (wasPlaying) {
+        setTimeout(() => {
+          if (howlRef.current) {
+            howlRef.current.play();
+            console.log('Resumed after direct seeking');
+          }
+        }, 50);
+      }
 
       setProgress(position);
     } else {
@@ -272,9 +288,28 @@ const Readtome = () => {
 
         // Wait for the audio to be ready before seeking
         if (howlRef.current.state() === 'loaded') {
+          const wasPlaying = howlRef.current.playing();
+          console.log(`Will pause-seek-resume. Was playing: ${wasPlaying}`);
+
+          // Pause if playing, seek, then resume if needed
+          if (wasPlaying) {
+            howlRef.current.pause();
+            console.log('Paused for seeking');
+          }
+
           const result = howlRef.current.seek(positionInChunk);
           console.log(`Seek result:`, result);
           console.log(`New position after seek:`, howlRef.current.seek());
+
+          if (wasPlaying) {
+            setTimeout(() => {
+              if (howlRef.current) {
+                howlRef.current.play();
+                console.log('Resumed after seeking');
+              }
+            }, 50);
+          }
+
           setProgress(positionInChunk);
         } else {
           console.log('Audio not loaded yet, waiting...');
@@ -282,8 +317,23 @@ const Readtome = () => {
           setTimeout(() => {
             if (howlRef.current && howlRef.current.state() === 'loaded') {
               console.log('Retrying seek after audio loaded');
+              const wasPlaying = howlRef.current.playing();
+
+              if (wasPlaying) {
+                howlRef.current.pause();
+              }
+
               const result = howlRef.current.seek(positionInChunk);
               console.log(`Delayed seek result:`, result);
+
+              if (wasPlaying) {
+                setTimeout(() => {
+                  if (howlRef.current) {
+                    howlRef.current.play();
+                  }
+                }, 50);
+              }
+
               setProgress(positionInChunk);
             }
           }, 500);
