@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Readability from './Readability';
 
 const App = () => {
   const [message, setMessage] = useState('Loading...');
@@ -13,6 +14,7 @@ const App = () => {
     <div>
       <h1>Read To Me Later</h1>
       <p>From API: {message}</p>
+      <Readability />
     </div>
   );
 };
