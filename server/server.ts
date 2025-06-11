@@ -1,4 +1,5 @@
 import { parse_url } from './parse_url';
+import { generate_audio } from './generate_audio';
 
 const server = Bun.serve({
   port: 3000,
@@ -9,7 +10,7 @@ const server = Bun.serve({
       return new Response('Hello World');
     }
 
-    if (url.pathname === '/api/readability' && req.method === 'POST') {
+    if (url.pathname === '/api/readtome' && req.method === 'POST') {
       try {
         const body = await req.json();
         const targetUrl = body.url;
@@ -22,24 +23,53 @@ const server = Bun.serve({
         }
 
         const result = await parse_url(targetUrl);
+        const audioResult = await generate_audio(result.body, {
+          audioDir: './server/audio'
+        });
 
         return new Response(
           JSON.stringify({
             title: result.title,
             content: result.body,
+            audioPath: `/api/audio/${audioResult.hash}.mp3`,
+            audioHash: audioResult.hash,
           }),
           {
             headers: { 'Content-Type': 'application/json' },
           }
         );
-      } catch {
+      } catch (error) {
         return new Response(
-          JSON.stringify({ error: 'Failed to process URL' }),
+          JSON.stringify({ 
+            error: `Failed to process URL: ${error instanceof Error ? error.message : 'Unknown error'}` 
+          }),
           {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
           }
         );
+      }
+    }
+
+    // Serve audio files
+    if (url.pathname.startsWith('/api/audio/') && req.method === 'GET') {
+      const filename = url.pathname.replace('/api/audio/', '');
+      const audioPath = `./server/audio/${filename}`;
+      
+      try {
+        const file = Bun.file(audioPath);
+        if (await file.exists()) {
+          return new Response(file, {
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Disposition': `inline; filename="${filename}"`,
+            },
+          });
+        } else {
+          return new Response('Audio file not found', { status: 404 });
+        }
+      } catch {
+        return new Response('Error serving audio file', { status: 500 });
       }
     }
 
