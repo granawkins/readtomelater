@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AudioPlayer from './AudioPlayer';
 
 const Readtome = () => {
   const [url, setUrl] = useState('');
@@ -59,10 +60,7 @@ const Readtome = () => {
       {audioPath && (
         <div style={{ marginTop: '20px' }}>
           <h3>Audio:</h3>
-          <audio controls style={{ width: '100%', maxWidth: '600px' }}>
-            <source src={audioPath} type="audio/mpeg" />
-            Your browser does not support the audio element.
-          </audio>
+          <AudioPlayer audioUrl={audioPath} />
         </div>
       )}
       {content && (
