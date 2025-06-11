@@ -1,6 +1,24 @@
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll, mock } from 'bun:test';
 import { generate_audio } from './generate_audio';
 import { existsSync, rmSync } from 'fs';
+
+// Mock OpenAI
+const mockOpenAI = {
+  audio: {
+    speech: {
+      create: mock(() => Promise.resolve({
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(1024)) // Mock 1KB audio file
+      }))
+    }
+  }
+};
+
+// Mock the OpenAI import
+mock.module('openai', () => ({
+  default: function OpenAI() {
+    return mockOpenAI;
+  }
+}));
 
 describe('generate_audio', () => {
   beforeAll(() => {
