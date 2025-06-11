@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Read To Me Later</title>
+    <style>
+      .content-item {
+        padding: 10px;
+        border: 1px solid #000000;
+        cursor: pointer;
+      }
+      .content-item:hover {
+        background-color: #f5f5f5;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <h1>Read To Me Later</h1>
+      <form onsubmit="submitUrl(event)">
+        <input type="url" id="urlInput" placeholder="Enter URL to read later" required>
+        <button type="submit">Submit</button>
+      </form>
+      <div id="contentList"></div>
+      <audio id="audioPlayer" controls style="display: none;">
+        Your browser does not support the audio element.
+      </audio>
+    </div>
+
+    <template id="content-item-template">
+      <div class="content-item">
+        <div class="title"></div>
+      </div>
+    </template>
+
+    <script>
+      function submitUrl(event) {
+        event.preventDefault();
+        const url = document.getElementById('urlInput').value;
+        fetch('/api/add-article', {
+          method: 'POST',
+          body: JSON.stringify({ url }),
+        }).then(() => {
+          document.getElementById('urlInput').value = '';
+          setTimeout(fetchContent, 200);
+        })
+      }
+
+      function handleClickContent(item) {
+        const audioPlayer = document.getElementById('audioPlayer');
+        audioPlayer.style.display = 'block';
+        audioPlayer.src = `/api/stream?id=${item.id}`;
+        audioPlayer.play();
+      }
+
+      function createContentItem(item) {
+        const template = document.getElementById('content-item-template');
+        const clone = template.content.cloneNode(true);
+        const contentItem = clone.querySelector('.content-item');
+        contentItem.querySelector('.title').textContent = item.title;
+        contentItem.addEventListener('click', () => handleClickContent(item));
+
+        return clone;
+      }
+
+      function fetchContent() {
+        fetch('/api/content')
+          .then(response => response.json())
+          .then(data => {
+            const contentList = document.getElementById('contentList');
+            contentList.innerHTML = '';
+            data.forEach(item => {
+              const contentItem = createContentItem(item);
+              contentList.appendChild(contentItem);
+            });
+          })
+      }
+
+      fetchContent();
+    </script>
+  </body>
+</html>
