@@ -13,7 +13,8 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "bun": "latest",
-    "jsdom": "^26.1.0"
+    "jsdom": "^26.1.0",
+    "openai": "^5.3.0"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

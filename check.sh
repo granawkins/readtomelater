@@ -6,4 +6,4 @@ set -e
 # Install dependencies
 bun run format
 bun run lint
-# bun run test
+bun run test
