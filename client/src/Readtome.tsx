@@ -142,7 +142,10 @@ const Readtome = () => {
 
     progressIntervalRef.current = setInterval(() => {
       if (howlRef.current && isPlaying) {
-        const currentSeek = howlRef.current.seek();
+        const currentSeek =
+          typeof howlRef.current.seek() === 'number'
+            ? howlRef.current.seek()
+            : 0;
         setProgress(currentSeek);
 
         // Calculate total progress across all chunks
@@ -152,6 +155,10 @@ const Readtome = () => {
         }
         totalProg += currentSeek;
         setTotalProgress(totalProg);
+
+        console.log(
+          `Progress: chunk ${currentChunk}, seek ${currentSeek.toFixed(1)}s, total ${totalProg.toFixed(1)}s`
+        );
       }
     }, 100);
   };
@@ -201,7 +208,13 @@ const Readtome = () => {
 
   // Seek to position in total timeline (across all chunks)
   const seekToTotalPosition = (totalPosition: number) => {
-    if (!data) return;
+    if (!data) {
+      console.log('No data available for seeking');
+      return;
+    }
+
+    console.log(`Seeking to total position: ${totalPosition}s`);
+    console.log('Chunk durations:', chunkDurations.current);
 
     let accumulatedTime = 0;
     let targetChunk = 0;
@@ -210,9 +223,16 @@ const Readtome = () => {
     // Find which chunk contains this position
     for (let i = 0; i < data.audioChunks.length; i++) {
       const chunkDuration = chunkDurations.current[i] || 0;
+      console.log(
+        `Chunk ${i}: duration ${chunkDuration}s, accumulated ${accumulatedTime}s`
+      );
+
       if (accumulatedTime + chunkDuration > totalPosition) {
         targetChunk = i;
         positionInChunk = totalPosition - accumulatedTime;
+        console.log(
+          `Target chunk ${targetChunk}, position in chunk: ${positionInChunk}s`
+        );
         break;
       }
       accumulatedTime += chunkDuration;
@@ -220,17 +240,22 @@ const Readtome = () => {
 
     // Switch to the target chunk if needed
     if (targetChunk !== currentChunk) {
+      console.log(
+        `Switching from chunk ${currentChunk} to chunk ${targetChunk}`
+      );
       setCurrentChunk(targetChunk);
       // The seek will happen after the chunk loads
       setTimeout(() => {
         if (howlRef.current) {
+          console.log(`Seeking to ${positionInChunk}s in new chunk`);
           howlRef.current.seek(positionInChunk);
           setProgress(positionInChunk);
         }
-      }, 100);
+      }, 200);
     } else {
       // Same chunk, just seek
       if (howlRef.current) {
+        console.log(`Seeking to ${positionInChunk}s in current chunk`);
         howlRef.current.seek(positionInChunk);
         setProgress(positionInChunk);
       }
@@ -241,27 +266,40 @@ const Readtome = () => {
   const preloadChunkDurations = () => {
     if (!data) return;
 
+    console.log(`Preloading ${data.audioChunks.length} chunk durations...`);
+
     data.audioChunks.forEach((chunk, index) => {
       if (!chunkDurations.current[index]) {
+        console.log(`Loading metadata for chunk ${index}:`, chunk.audioPath);
         const tempHowl = new Howl({
           src: [chunk.audioPath],
           html5: true,
           preload: 'metadata',
           onload: () => {
-            chunkDurations.current[index] = tempHowl.duration();
+            const duration = tempHowl.duration();
+            chunkDurations.current[index] = duration;
+            console.log(`Chunk ${index} duration: ${duration}s`);
             tempHowl.unload();
 
             // Update total duration when all chunks are loaded
-            if (
-              chunkDurations.current.filter((d) => d > 0).length ===
-              data.audioChunks.length
-            ) {
+            const loadedCount = chunkDurations.current.filter(
+              (d) => d > 0
+            ).length;
+            console.log(
+              `Loaded ${loadedCount}/${data.audioChunks.length} chunks`
+            );
+
+            if (loadedCount === data.audioChunks.length) {
               const total = chunkDurations.current.reduce(
                 (sum, d) => sum + d,
                 0
               );
+              console.log(`Total duration: ${total}s`);
               setTotalDuration(total);
             }
+          },
+          onloaderror: (id, error) => {
+            console.error(`Failed to load chunk ${index}:`, error);
           },
         });
       }
