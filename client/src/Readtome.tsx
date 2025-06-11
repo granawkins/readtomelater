@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-const Readability = () => {
+const Readtome = () => {
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [audioPath, setAudioPath] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -12,7 +13,7 @@ const Readability = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/readability', {
+      const response = await fetch('/api/readtome', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -22,9 +23,11 @@ const Readability = () => {
       const data = await response.json();
       setTitle(data.title || 'No title found');
       setContent(data.content || 'No content extracted');
+      setAudioPath(data.audioPath || '');
     } catch {
       setTitle('Error');
       setContent('Error extracting content');
+      setAudioPath('');
     } finally {
       setLoading(false);
     }
@@ -32,17 +35,17 @@ const Readability = () => {
 
   return (
     <div>
-      <h2>Readability Test</h2>
+      <h2>Read To Me</h2>
       <form onSubmit={handleSubmit}>
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Enter URL to parse"
-          style={{ width: '300px', marginRight: '10px' }}
+          placeholder="Enter URL to parse and listen to"
+          style={{ width: '400px', marginRight: '10px' }}
         />
         <button type="submit" disabled={loading}>
-          {loading ? 'Loading...' : 'Submit'}
+          {loading ? 'Processing...' : 'Read To Me'}
         </button>
       </form>
       {title && (
@@ -53,14 +56,33 @@ const Readability = () => {
           </p>
         </div>
       )}
+      {audioPath && (
+        <div style={{ marginTop: '20px' }}>
+          <h3>Audio:</h3>
+          <audio controls style={{ width: '100%', maxWidth: '600px' }}>
+            <source src={audioPath} type="audio/mpeg" />
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      )}
       {content && (
         <div style={{ marginTop: '20px' }}>
           <h3>Content:</h3>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
+          <div
+            style={{
+              whiteSpace: 'pre-wrap',
+              maxHeight: '400px',
+              overflow: 'auto',
+              border: '1px solid #ccc',
+              padding: '10px',
+            }}
+          >
+            {content}
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-export default Readability;
+export default Readtome;
