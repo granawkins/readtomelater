@@ -23,18 +23,23 @@ const server = Bun.serve({
 
         const result = await parse_url(targetUrl);
 
-        return new Response(JSON.stringify({
-          title: result.title,
-          content: result.body,
-        }), {
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-      } catch (error) {
-        return new Response(JSON.stringify({ error: 'Failed to process URL' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({
+            title: result.title,
+            content: result.body,
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      } catch {
+        return new Response(
+          JSON.stringify({ error: 'Failed to process URL' }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
       }
     }
 

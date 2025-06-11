@@ -34,7 +34,7 @@ const mockHtml = `
 `;
 
 describe('parse_url', () => {
-  let fetchSpy: any;
+  let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
     fetchSpy = spyOn(global, 'fetch').mockResolvedValue({
@@ -47,9 +47,13 @@ describe('parse_url', () => {
   });
 
   it('should parse URL and return title and body', async () => {
-    const result = await parse_url('https://blog.samaltman.com/the-gentle-singularity');
+    const result = await parse_url(
+      'https://blog.samaltman.com/the-gentle-singularity'
+    );
 
-    expect(fetchSpy).toHaveBeenCalledWith('https://blog.samaltman.com/the-gentle-singularity');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://blog.samaltman.com/the-gentle-singularity'
+    );
     expect(result.title).toBe('The Gentle Singularity - Sam Altman');
     expect(result.body).toContain('We are past the event horizon');
     expect(result.body).toContain('building digital superintelligence');
@@ -60,6 +64,8 @@ describe('parse_url', () => {
   it('should throw error when fetch fails', async () => {
     fetchSpy.mockRejectedValue(new Error('Network error'));
 
-    await expect(parse_url('https://example.com/invalid')).rejects.toThrow('Network error');
+    await expect(parse_url('https://example.com/invalid')).rejects.toThrow(
+      'Network error'
+    );
   });
 });

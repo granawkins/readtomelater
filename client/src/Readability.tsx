@@ -22,7 +22,7 @@ const Readability = () => {
       const data = await response.json();
       setTitle(data.title || 'No title found');
       setContent(data.content || 'No content extracted');
-    } catch (error) {
+    } catch {
       setTitle('Error');
       setContent('Error extracting content');
     } finally {
@@ -48,15 +48,15 @@ const Readability = () => {
       {title && (
         <div style={{ marginTop: '20px' }}>
           <h3>Title:</h3>
-          <p><strong>{title}</strong></p>
+          <p>
+            <strong>{title}</strong>
+          </p>
         </div>
       )}
       {content && (
         <div style={{ marginTop: '20px' }}>
           <h3>Content:</h3>
-          <div style={{ whiteSpace: 'pre-wrap' }}>
-            {content}
-          </div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
         </div>
       )}
     </div>
