@@ -7,7 +7,7 @@ export PATH="$HOME/.bun/bin:$PATH"
 bun run format
 
 # Lint code with ESLint (with auto-fix)
-bun exec eslint . --fix
+bunx eslint . --fix
 
 # Run tests (since there's no GitHub CI)
 bun run test
