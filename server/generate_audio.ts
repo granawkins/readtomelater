@@ -3,10 +3,6 @@ import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export interface GenerateAudioOptions {
   voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
   model?: 'tts-1' | 'tts-1-hd';
@@ -44,6 +40,11 @@ export async function generate_audio(
   }
   
   try {
+    // Create OpenAI client lazily to allow for testing without API key
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    
     // Generate audio using OpenAI
     const mp3 = await openai.audio.speech.create({
       model,
