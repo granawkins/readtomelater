@@ -1,0 +1,19 @@
+{
+  "name": "server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "bun --hot server.js",
+    "start": "NODE_ENV=production bun server.js",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "bun": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}

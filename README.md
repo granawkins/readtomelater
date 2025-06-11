@@ -1,9 +1,11 @@
 # Read To Me Later
+
 Send Blogs, websites and PDFs to ReadToMeLater, and have them read to you by an AI on your phone.
 
 ## MVP Interface
 
 Website (readtomelater.com)
+
 - Landing:
   - Video demonstrating
   - Login with Google button
@@ -14,6 +16,7 @@ Website (readtomelater.com)
   - On desktop, a 'bookmarklet' you can drag to your bookmarks bar
 
 Backend
+
 - Database:
   - Users: id, google_id, email, created_at
   - Content: id, created_at, user_id, url, title, text, processing_status, duration_seconds, progress_seconds, error_message
