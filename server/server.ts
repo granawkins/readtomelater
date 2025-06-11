@@ -6,6 +6,7 @@ const server = Bun.serve({
   port: 3000,
   async fetch(req) {
     const url = new URL(req.url);
+    console.log(`Request: ${req.method} ${url.pathname}`);
 
     if (url.pathname === '/api/') {
       return new Response('Hello World');
@@ -21,6 +22,31 @@ const server = Bun.serve({
             status: 400,
             headers: { 'Content-Type': 'application/json' },
           });
+        }
+
+        // For testing without OpenAI API key, return mock data
+        if (!process.env.OPENAI_API_KEY) {
+          console.log('No OpenAI API key, returning mock data for testing');
+          return new Response(
+            JSON.stringify({
+              title: 'Test Article',
+              content:
+                'This is a test article for debugging the streaming audio player.',
+              audioHash: 'test-hash',
+              segments: [
+                {
+                  segmentPath: '/api/audio/segment/test.mp3',
+                  segmentNumber: 0,
+                  hash: 'test-hash-0',
+                  fileExists: true,
+                },
+              ],
+              totalSegments: 1,
+            }),
+            {
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
         }
 
         const result = await parse_url(targetUrl);
@@ -72,14 +98,19 @@ const server = Bun.serve({
     // Serve audio segment files
     if (
       url.pathname.startsWith('/api/audio/segment/') &&
-      req.method === 'GET'
+      (req.method === 'GET' || req.method === 'HEAD')
     ) {
       const filename = url.pathname.replace('/api/audio/segment/', '');
       const audioPath = `./audio/${filename}`;
 
+      console.log(`Serving audio segment: ${filename}, path: ${audioPath}`);
+
       try {
         const file = Bun.file(audioPath);
-        if (await file.exists()) {
+        const exists = await file.exists();
+        console.log(`File exists: ${exists}`);
+
+        if (exists) {
           return new Response(file, {
             headers: {
               'Content-Type': 'audio/mpeg',
@@ -89,9 +120,11 @@ const server = Bun.serve({
             },
           });
         } else {
+          console.log(`File not found: ${audioPath}`);
           return new Response('Audio segment not found', { status: 404 });
         }
-      } catch {
+      } catch (error) {
+        console.error(`Error serving audio segment: ${error}`);
         return new Response('Error serving audio segment', { status: 500 });
       }
     }

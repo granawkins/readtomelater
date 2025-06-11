@@ -70,13 +70,22 @@ const StreamingAudioPlayer = ({
         resolve();
       };
 
-      const onError = () => {
+      const onError = (e: Event) => {
+        console.error(`Failed to load segment ${segmentIndex + 1}:`, e);
+        console.error(`Segment path: ${segment.segmentPath}`);
+        console.error(
+          `Audio element error:`,
+          (e.target as HTMLAudioElement)?.error
+        );
         setError(`Failed to load segment ${segmentIndex + 1}`);
         audio.removeEventListener('loadeddata', onLoadedData);
         audio.removeEventListener('error', onError);
         reject();
       };
 
+      console.log(
+        `Loading segment ${segmentIndex + 1} from: ${segment.segmentPath}`
+      );
       audio.addEventListener('loadeddata', onLoadedData);
       audio.addEventListener('error', onError);
       audio.src = segment.segmentPath;
