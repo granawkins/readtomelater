@@ -1,4 +1,4 @@
-import { parse_url } from './parse_url';
+import { parse_url, chunkText } from './parse_url';
 import { generate_audio } from './generate_audio';
 
 const server = Bun.serve({
@@ -23,18 +23,34 @@ const server = Bun.serve({
         }
 
         const result = await parse_url(targetUrl);
-        // Limit text to 4096 characters for OpenAI TTS API
-        const textForAudio = result.body.slice(0, 4096);
-        const audioResult = await generate_audio(textForAudio, {
-          audioDir: './audio',
-        });
+
+        // Break content into chunks of ~4000 characters
+        const chunks = chunkText(result.body, 4000);
+
+        // Generate audio for each chunk
+        const audioChunks = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const audioResult = await generate_audio(chunk.text, {
+            audioDir: './audio',
+          });
+
+          audioChunks.push({
+            index: i,
+            audioPath: `/api/audio/${audioResult.hash}.mp3`,
+            audioHash: audioResult.hash,
+            startIndex: chunk.startIndex,
+            endIndex: chunk.endIndex,
+            textLength: chunk.text.length,
+          });
+        }
 
         return new Response(
           JSON.stringify({
             title: result.title,
             content: result.body,
-            audioPath: `/api/audio/${audioResult.hash}.mp3`,
-            audioHash: audioResult.hash,
+            audioChunks: audioChunks,
+            totalChunks: chunks.length,
           }),
           {
             headers: { 'Content-Type': 'application/json' },
