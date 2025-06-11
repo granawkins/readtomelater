@@ -11,9 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "bun": "latest"
+    "@mozilla/readability": "^0.6.0",
+    "bun": "latest",
+    "jsdom": "^26.1.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
     "bun-types": "latest"
   }
 }
