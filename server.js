@@ -3,11 +3,14 @@ import { processUrl } from './processing.js';
 
 const server = Bun.serve({
   port: 3000,
+  hostname: '0.0.0.0',
   async fetch(req) {
     const url = new URL(req.url);
 
     if (url.pathname === '/') {
-      return new Response(Bun.file('index.html'));
+      return new Response(Bun.file('index.html'), {
+        headers: { 'Content-Type': 'text/html' }
+      });
     }
 
     if (url.pathname === '/api/add-article') {
@@ -98,4 +101,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`Server running at http://localhost:${server.port}`);
+console.log(`Server running at http://0.0.0.0:${server.port}`);
