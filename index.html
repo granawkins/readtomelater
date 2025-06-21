@@ -262,7 +262,7 @@
           clearInterval(progressSaveInterval);
         }
         
-        // Save progress every 5 seconds while playing
+        // Save progress every 2 seconds while playing
         progressSaveInterval = setInterval(() => {
           if (currentPlayingId && !audioPlayer.paused && audioPlayer.currentTime > 0) {
             fetch('/api/progress', {
@@ -270,26 +270,30 @@
               body: JSON.stringify({ id: currentPlayingId, position: audioPlayer.currentTime })
             });
           }
-        }, 5000);
+        }, 2000);
+      }
+
+      function setupAudioEventListeners() {
+        const audioPlayer = document.getElementById('audioPlayer');
         
-        // Stop tracking when audio ends or pauses
-        audioPlayer.addEventListener('pause', () => {
-          if (progressSaveInterval) {
-            clearInterval(progressSaveInterval);
-            progressSaveInterval = null;
+        // Resume tracking when play resumes (but only start interval if not already running)
+        audioPlayer.addEventListener('play', () => {
+          if (!progressSaveInterval) {
+            startProgressTracking();
           }
         });
         
+        // Stop tracking when audio ends
         audioPlayer.addEventListener('ended', () => {
           if (progressSaveInterval) {
             clearInterval(progressSaveInterval);
             progressSaveInterval = null;
           }
-          // Reset position when finished
-          if (currentPlayingId) {
+          // Save final position as duration (100% complete)
+          if (currentPlayingId && audioPlayer.duration) {
             fetch('/api/progress', {
               method: 'POST',
-              body: JSON.stringify({ id: currentPlayingId, position: 0 })
+              body: JSON.stringify({ id: currentPlayingId, position: audioPlayer.duration })
             });
           }
         });
@@ -359,6 +363,9 @@
       }
 
       fetchContent();
+      
+      // Set up audio event listeners once
+      setupAudioEventListeners();
       
       // Refresh content every 2 seconds to show processing status updates
       setInterval(fetchContent, 2000);
