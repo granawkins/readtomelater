@@ -3,6 +3,7 @@ import { processUrl } from './processing.js';
 
 const server = Bun.serve({
   port: 3000,
+  idleTimeout: 120,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -96,48 +97,19 @@ const server = Bun.serve({
                 'Connection': 'keep-alive'
             };
             
-            // Create a stream that reads the file as it grows
+            // Stream whatever is available now
             const stream = new ReadableStream({
                 async start(controller) {
-                    let lastSize = 0;
-                    let currentContent = getContent(id);
-                    
-                    // Keep streaming until the file is completed
-                    while (currentContent.status === 'processing') {
-                        try {
-                            const currentFile = Bun.file(content.content_url);
-                            const currentSize = Number(await currentFile.size);
-                            
-                            // If file has grown, read and send the new data
-                            if (currentSize > lastSize) {
-                                const fileBuffer = await currentFile.arrayBuffer();
-                                const newData = fileBuffer.slice(lastSize);
-                                controller.enqueue(new Uint8Array(newData));
-                                lastSize = currentSize;
-                            }
-                            
-                            // Wait a bit before checking again
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                            
-                            // Refresh content status
-                            currentContent = getContent(id);
-                        } catch (error) {
-                            console.error('Error in live streaming:', error);
-                            break;
-                        }
-                    }
-                    
-                    // Send any remaining data when processing is complete
                     try {
-                        const finalFile = Bun.file(content.content_url);
-                        const finalSize = Number(await finalFile.size);
-                        if (finalSize > lastSize) {
-                            const fileBuffer = await finalFile.arrayBuffer();
-                            const remainingData = fileBuffer.slice(lastSize);
-                            controller.enqueue(new Uint8Array(remainingData));
+                        const currentFile = Bun.file(content.content_url);
+                        const fileExists = await currentFile.exists();
+                        
+                        if (fileExists) {
+                            const fileBuffer = await currentFile.arrayBuffer();
+                            controller.enqueue(new Uint8Array(fileBuffer));
                         }
                     } catch (error) {
-                        console.error('Error sending final data:', error);
+                        console.error('Error in live streaming:', error);
                     }
                     
                     controller.close();
