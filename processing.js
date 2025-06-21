@@ -50,15 +50,18 @@ async function generateAndWriteFile(text, filename, contentId) {
     const textChunks = splitTextIntoChunks(text);
     const totalChunks = textChunks.length;
     
-    // Check if file already exists and is complete
+    // Only skip generation if file exists and we're already marked as completed
     if (fs.existsSync(filename)) {
         const stats = fs.statSync(filename);
         if (stats.size > 0) {
-            // File exists with content - assume it's complete
-            console.log(`File ${filename} already exists`);
-            updateGenerationProgress(contentId, totalChunks, totalChunks);
-            updateContentStatus(contentId, 'completed');
-            return;
+            // Check current status from database
+            const { getContent } = await import('./database.js');
+            const currentItem = getContent(contentId);
+            if (currentItem.status === 'completed') {
+                console.log(`File ${filename} already complete`);
+                return;
+            }
+            // Otherwise continue with generation logic below
         }
     }
     
