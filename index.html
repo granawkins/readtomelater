@@ -2,17 +2,175 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Read To Me Later</title>
     <style>
-      .content-item {
-        padding: 10px;
-        border: 1px solid #000000;
-        cursor: pointer;
+      body {
+        margin: 0;
+        padding: 20px;
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        background-color: #f8f9fa;
       }
+      
+      #root {
+        display: flex;
+        flex-direction: column;
+        max-width: 600px;
+        width: 100%;
+        gap: 20px;
+      }
+      
+      h1 {
+        margin: 0;
+        text-align: center;
+        color: #333;
+      }
+      
+      form {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+      }
+      
+      #urlInput {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        font-size: 16px;
+      }
+      
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      
+      button:hover {
+        background-color: #0056b3;
+      }
+      
+      #contentList {
+        width: 100%;
+      }
+      
+      .content-item {
+        padding: 15px;
+        border: 1px solid #ddd;
+        margin-bottom: 10px;
+        cursor: pointer;
+        background-color: white;
+      }
+      
       .content-item:hover {
         background-color: #f5f5f5;
+      }
+      
+      .title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #333;
+      }
+      
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #666;
+      }
+      
+      .status {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      
+      .status.pending {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+      
+      .status.completed {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      
+      .status.error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      
+      .url-link {
+        margin-bottom: 8px;
+      }
+      
+      .url-link a {
+        color: #007bff;
+        text-decoration: none;
+        font-size: 12px;
+      }
+      
+      .url-link a:hover {
+        text-decoration: underline;
+      }
+      
+      .progress-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      
+      .progress-bar {
+        flex: 1;
+        height: 4px;
+        background-color: #e9ecef;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      
+      .progress-fill {
+        height: 100%;
+        background-color: #007bff;
+        transition: width 0.3s ease;
+      }
+      
+      .progress-text {
+        font-size: 11px;
+        color: #666;
+        min-width: 30px;
+      }
+      
+      #audioContainer {
+        position: fixed;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 600px;
+        width: 100%;
+        background-color: white;
+        border: 1px solid #ddd;
+        padding: 15px;
+        box-sizing: border-box;
+        display: none;
+      }
+      
+      #currentlyPlaying {
+        margin-bottom: 10px;
+        font-weight: bold;
+        color: #333;
+      }
+      
+      #audioPlayer {
+        width: 100%;
       }
     </style>
   </head>
@@ -24,7 +182,11 @@
         <button type="submit">Submit</button>
       </form>
       <div id="contentList"></div>
-      <audio id="audioPlayer" controls style="display: none;">
+    </div>
+
+    <div id="audioContainer">
+      <div id="currentlyPlaying">Now Playing: </div>
+      <audio id="audioPlayer" controls>
         Your browser does not support the audio element.
       </audio>
     </div>
@@ -32,6 +194,17 @@
     <template id="content-item-template">
       <div class="content-item">
         <div class="title"></div>
+        <div class="meta">
+          <div class="created-at"></div>
+          <div class="status"></div>
+        </div>
+        <div class="url-link"></div>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+          <div class="progress-text"></div>
+        </div>
       </div>
     </template>
 
@@ -50,7 +223,11 @@
 
       function handleClickContent(item) {
         const audioPlayer = document.getElementById('audioPlayer');
-        audioPlayer.style.display = 'block';
+        const audioContainer = document.getElementById('audioContainer');
+        const currentlyPlaying = document.getElementById('currentlyPlaying');
+        
+        audioContainer.style.display = 'block';
+        currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
         audioPlayer.play();
       }
@@ -60,11 +237,30 @@
         const clone = template.content.cloneNode(true);
         const contentItem = clone.querySelector('.content-item');
         
-        const title = item.title;
-        const status = item.status || 'pending';
-        const statusText = status === 'processing' ? ' (Processing...)' : status === 'pending' ? ' (Queued)' : '';
+        // Title
+        contentItem.querySelector('.title').textContent = item.title;
         
-        contentItem.querySelector('.title').textContent = title + statusText;
+        // Created at
+        const createdAt = new Date(item.created_at);
+        contentItem.querySelector('.created-at').textContent = 
+          createdAt.toLocaleDateString() + ' ' + createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        // Status
+        const statusEl = contentItem.querySelector('.status');
+        statusEl.textContent = item.status;
+        statusEl.className = `status ${item.status}`;
+        
+        // URL link
+        const urlLink = contentItem.querySelector('.url-link');
+        urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
+        
+        // Progress
+        const progressFill = contentItem.querySelector('.progress-fill');
+        const progressText = contentItem.querySelector('.progress-text');
+        const progressPercent = Math.round(item.progress || 0);
+        progressFill.style.width = `${progressPercent}%`;
+        progressText.textContent = `${progressPercent}%`;
+        
         contentItem.addEventListener('click', () => handleClickContent(item));
 
         return clone;
