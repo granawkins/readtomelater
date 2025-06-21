@@ -14,7 +14,6 @@ db.run(`
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
-    progress INTEGER DEFAULT 0,
     content_url TEXT DEFAULT NULL,
     generation_chunks_completed INTEGER DEFAULT 0,
     generation_total_chunks INTEGER DEFAULT 0,
@@ -36,18 +35,17 @@ export const insertContent = (sourceUrl, title, body, contentUrl) => {
   }
 };
 
-export const updateContentStatus = (id, status, progress = 0) => {
+export const updateContentStatus = (id, status) => {
   return db.run(
-    "UPDATE content SET status = ?, progress = ? WHERE id = ?",
-    [status, progress, id]
+    "UPDATE content SET status = ? WHERE id = ?",
+    [status, id]
   );
 };
 
 export const updateGenerationProgress = (id, chunksCompleted, totalChunks) => {
-  const progress = totalChunks > 0 ? Math.round((chunksCompleted / totalChunks) * 100) : 0;
   return db.run(
-    "UPDATE content SET generation_chunks_completed = ?, generation_total_chunks = ?, progress = ? WHERE id = ?",
-    [chunksCompleted, totalChunks, progress, id]
+    "UPDATE content SET generation_chunks_completed = ?, generation_total_chunks = ? WHERE id = ?",
+    [chunksCompleted, totalChunks, id]
   );
 };
 

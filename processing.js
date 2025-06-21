@@ -63,7 +63,7 @@ async function generateAndWriteFile(text, filename, contentId) {
     }
     
     try {
-        // Update status and initialize progress tracking
+        // Update status and initialize progress tracking  
         updateContentStatus(contentId, 'processing');
         updateGenerationProgress(contentId, 0, totalChunks);
         

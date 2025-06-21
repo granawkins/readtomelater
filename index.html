@@ -314,7 +314,9 @@
         const progressText = contentItem.querySelector('.progress-text');
         
         if (item.status === 'processing') {
-          const progressPercent = Math.round(item.progress || 0);
+          const progressPercent = item.generation_total_chunks > 0 
+            ? Math.round((item.generation_chunks_completed / item.generation_total_chunks) * 100)
+            : 0;
           progressFill.style.width = `${progressPercent}%`;
           progressText.textContent = `${progressPercent}%`;
         } else if (item.status === 'completed') {
