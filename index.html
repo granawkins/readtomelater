@@ -236,6 +236,14 @@
         
         // Set up progress tracking
         audioPlayer.addEventListener('loadedmetadata', () => {
+          // Save duration to database if not already saved
+          if (item.duration_seconds === 0 && audioPlayer.duration) {
+            fetch('/api/duration', {
+              method: 'POST',
+              body: JSON.stringify({ id: item.id, duration: Math.round(audioPlayer.duration) })
+            });
+          }
+          
           // Resume from saved position
           if (item.listening_position_seconds > 0) {
             audioPlayer.currentTime = item.listening_position_seconds;
@@ -309,7 +317,7 @@
         const urlLink = contentItem.querySelector('.url-link');
         urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
         
-        // Progress - show generation progress when processing, listening progress when completed
+        // Progress
         const progressFill = contentItem.querySelector('.progress-fill');
         const progressText = contentItem.querySelector('.progress-text');
         
@@ -320,15 +328,16 @@
           progressFill.style.width = `${progressPercent}%`;
           progressText.textContent = `${progressPercent}%`;
         } else if (item.status === 'completed') {
-          // Show listening progress as percentage of total duration
-          // For now just show if started (position > 0)
-          const hasStarted = item.listening_position_seconds > 0;
-          const progressPercent = hasStarted ? 50 : 0; // Placeholder - would need duration for real percentage
+          // Use actual duration if available, otherwise estimate
+          const durationSeconds = item.duration_seconds > 0 ? item.duration_seconds : 300; // 5 min default
+          const progressPercent = durationSeconds > 0 
+            ? Math.min(Math.round((item.listening_position_seconds / durationSeconds) * 100), 100)
+            : 0;
           progressFill.style.width = `${progressPercent}%`;
-          progressText.textContent = hasStarted ? 'Started' : 'Ready';
+          progressText.textContent = `${progressPercent}%`;
         } else {
           progressFill.style.width = '0%';
-          progressText.textContent = item.status;
+          progressText.textContent = '0%';
         }
         
         contentItem.addEventListener('click', () => handleClickContent(item));

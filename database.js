@@ -17,7 +17,8 @@ db.run(`
     content_url TEXT DEFAULT NULL,
     generation_chunks_completed INTEGER DEFAULT 0,
     generation_total_chunks INTEGER DEFAULT 0,
-    listening_position_seconds INTEGER DEFAULT 0
+    listening_position_seconds INTEGER DEFAULT 0,
+    duration_seconds INTEGER DEFAULT 0
   )
 `);
 
@@ -56,9 +57,15 @@ export const updateListeningPosition = (id, positionSeconds) => {
   );
 };
 
+export const updateDuration = (id, durationSeconds) => {
+  return db.run(
+    "UPDATE content SET duration_seconds = ? WHERE id = ?",
+    [durationSeconds, id]
+  );
+};
+
 export const getContent = (id) => {
   const result = db.prepare("SELECT * FROM content WHERE id = ?").get(id);
-  console.log(`Getting content for ${id}: ${result}`);
   return result;
 };
 

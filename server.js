@@ -1,4 +1,4 @@
-import { getAllContent, getContent, updateListeningPosition } from './database.js';
+import { getAllContent, getContent, updateListeningPosition, updateDuration } from './database.js';
 import { processUrl } from './processing.js';
 
 const server = Bun.serve({
@@ -53,6 +53,22 @@ const server = Bun.serve({
         });
       } catch (error) {
         console.error('Error updating progress:', error);
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/api/duration') {
+      try {
+        const { id, duration } = await req.json();
+        updateDuration(id, Math.round(duration));
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error updating duration:', error);
         return new Response(JSON.stringify({ success: false, error: error.message }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
