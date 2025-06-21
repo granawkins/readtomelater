@@ -7,4 +7,4 @@ bun install
 mkdir -p audio
 
 # Start server with PM2
-pm2 start ecosystem.prod.config.js
+pm2 start ecosystem.prod.config.cjs
