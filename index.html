@@ -221,15 +221,130 @@
         })
       }
 
+      let currentPlayingId = null;
+      let progressSaveInterval = null;
+      let refreshInterval = null;
+
       function handleClickContent(item) {
         const audioPlayer = document.getElementById('audioPlayer');
         const audioContainer = document.getElementById('audioContainer');
         const currentlyPlaying = document.getElementById('currentlyPlaying');
         
+        currentPlayingId = item.id;
         audioContainer.style.display = 'block';
         currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
+        
+        // Set up progress tracking
+        audioPlayer.addEventListener('loadedmetadata', () => {
+          // Save duration to database if not already saved
+          if (item.duration_seconds === 0 && audioPlayer.duration) {
+            fetch('/api/duration', {
+              method: 'POST',
+              body: JSON.stringify({ id: item.id, duration: Math.round(audioPlayer.duration) })
+            });
+          }
+          
+          // Resume from saved position
+          if (item.listening_position_seconds > 0) {
+            audioPlayer.currentTime = item.listening_position_seconds;
+          }
+        }, { once: true });
+        
         audioPlayer.play();
+        startProgressTracking();
+        
+        // Start refresh polling for processing items
+        if (item.status === 'processing') {
+          startRefreshPolling(item);
+        }
+      }
+
+      function startProgressTracking() {
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Clear any existing interval
+        if (progressSaveInterval) {
+          clearInterval(progressSaveInterval);
+        }
+        
+        // Save progress every 2 seconds while playing
+        progressSaveInterval = setInterval(() => {
+          if (currentPlayingId && !audioPlayer.paused && audioPlayer.currentTime > 0) {
+            fetch('/api/progress', {
+              method: 'POST',
+              body: JSON.stringify({ id: currentPlayingId, position: audioPlayer.currentTime })
+            });
+          }
+        }, 2000);
+      }
+
+      function startRefreshPolling(item) {
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Clear any existing refresh interval
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+        
+        // Poll every 2 seconds to check if we need to refresh for more content
+        refreshInterval = setInterval(async () => {
+          if (currentPlayingId === item.id && !audioPlayer.paused) {
+            try {
+              // Check current status
+              const response = await fetch('/api/content');
+              const content = await response.json();
+              const currentItem = content.find(c => c.id === item.id);
+              
+              if (currentItem && currentItem.status === 'processing') {
+                // Only refresh if we're near the end of currently loaded content
+                const currentTime = audioPlayer.currentTime;
+                const loadedDuration = audioPlayer.duration || 0;
+                const timeUntilEnd = loadedDuration - currentTime;
+                
+                // Refresh when less than 5 seconds of content remaining
+                if (timeUntilEnd < 5 && timeUntilEnd > 0) {
+                  console.log(`Refreshing audio source - ${timeUntilEnd.toFixed(1)}s remaining`);
+                  audioPlayer.src = `/api/stream?id=${item.id}&t=${Date.now()}`;
+                  audioPlayer.currentTime = currentTime;
+                  audioPlayer.play();
+                }
+              } else {
+                // Stop polling if no longer processing
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+              }
+            } catch (error) {
+              console.error('Error refreshing audio:', error);
+            }
+          }
+        }, 2000);
+      }
+
+      function setupAudioEventListeners() {
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Resume tracking when play resumes (but only start interval if not already running)
+        audioPlayer.addEventListener('play', () => {
+          if (!progressSaveInterval) {
+            startProgressTracking();
+          }
+        });
+        
+        // Stop tracking when audio ends
+        audioPlayer.addEventListener('ended', () => {
+          if (progressSaveInterval) {
+            clearInterval(progressSaveInterval);
+            progressSaveInterval = null;
+          }
+          // Save final position as duration (100% complete)
+          if (currentPlayingId && audioPlayer.duration) {
+            fetch('/api/progress', {
+              method: 'POST',
+              body: JSON.stringify({ id: currentPlayingId, position: audioPlayer.duration })
+            });
+          }
+        });
       }
 
       function createContentItem(item) {
@@ -257,9 +372,40 @@
         // Progress
         const progressFill = contentItem.querySelector('.progress-fill');
         const progressText = contentItem.querySelector('.progress-text');
-        const progressPercent = Math.round(item.progress || 0);
-        progressFill.style.width = `${progressPercent}%`;
-        progressText.textContent = `${progressPercent}%`;
+        
+        if (item.status === 'processing') {
+          // Estimate duration from text length if actual duration not available
+          let estimatedDuration = item.duration_seconds;
+          if (estimatedDuration <= 0 && item.body) {
+            // Rough estimate: 150 words per minute, 5 chars per word average
+            const charCount = item.body.length;
+            const estimatedWords = charCount / 5;
+            estimatedDuration = Math.round((estimatedWords / 150) * 60); // seconds
+          }
+          
+          if (estimatedDuration > 0) {
+            const progressPercent = Math.min(Math.round((item.listening_position_seconds / estimatedDuration) * 100), 100);
+            progressFill.style.width = `${progressPercent}%`;
+            progressText.textContent = `${progressPercent}%`;
+          } else {
+            const progressPercent = item.generation_total_chunks > 0 
+              ? Math.round((item.generation_chunks_completed / item.generation_total_chunks) * 100)
+              : 0;
+            progressFill.style.width = `${progressPercent}%`;
+            progressText.textContent = `${progressPercent}%`;
+          }
+        } else if (item.status === 'completed') {
+          // Use actual duration if available, otherwise estimate
+          const durationSeconds = item.duration_seconds > 0 ? item.duration_seconds : 300; // 5 min default
+          const progressPercent = durationSeconds > 0 
+            ? Math.min(Math.round((item.listening_position_seconds / durationSeconds) * 100), 100)
+            : 0;
+          progressFill.style.width = `${progressPercent}%`;
+          progressText.textContent = `${progressPercent}%`;
+        } else {
+          progressFill.style.width = '0%';
+          progressText.textContent = '0%';
+        }
         
         contentItem.addEventListener('click', () => handleClickContent(item));
 
@@ -280,6 +426,9 @@
       }
 
       fetchContent();
+      
+      // Set up audio event listeners once
+      setupAudioEventListeners();
       
       // Refresh content every 2 seconds to show processing status updates
       setInterval(fetchContent, 2000);

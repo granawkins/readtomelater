@@ -14,8 +14,11 @@ db.run(`
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
-    progress INTEGER DEFAULT 0,
-    content_url TEXT DEFAULT NULL
+    content_url TEXT DEFAULT NULL,
+    generation_chunks_completed INTEGER DEFAULT 0,
+    generation_total_chunks INTEGER DEFAULT 0,
+    listening_position_seconds INTEGER DEFAULT 0,
+    duration_seconds INTEGER DEFAULT 0
   )
 `);
 
@@ -33,16 +36,36 @@ export const insertContent = (sourceUrl, title, body, contentUrl) => {
   }
 };
 
-export const updateContentStatus = (id, status, progress = 0) => {
+export const updateContentStatus = (id, status) => {
   return db.run(
-    "UPDATE content SET status = ?, progress = ? WHERE id = ?",
-    [status, progress, id]
+    "UPDATE content SET status = ? WHERE id = ?",
+    [status, id]
+  );
+};
+
+export const updateGenerationProgress = (id, chunksCompleted, totalChunks) => {
+  return db.run(
+    "UPDATE content SET generation_chunks_completed = ?, generation_total_chunks = ? WHERE id = ?",
+    [chunksCompleted, totalChunks, id]
+  );
+};
+
+export const updateListeningPosition = (id, positionSeconds) => {
+  return db.run(
+    "UPDATE content SET listening_position_seconds = ? WHERE id = ?",
+    [positionSeconds, id]
+  );
+};
+
+export const updateDuration = (id, durationSeconds) => {
+  return db.run(
+    "UPDATE content SET duration_seconds = ? WHERE id = ?",
+    [durationSeconds, id]
   );
 };
 
 export const getContent = (id) => {
   const result = db.prepare("SELECT * FROM content WHERE id = ?").get(id);
-  console.log(`Getting content for ${id}: ${result}`);
   return result;
 };
 
