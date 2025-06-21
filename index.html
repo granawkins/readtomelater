@@ -223,6 +223,7 @@
 
       let currentPlayingId = null;
       let progressSaveInterval = null;
+      let refreshInterval = null;
 
       function handleClickContent(item) {
         const audioPlayer = document.getElementById('audioPlayer');
@@ -252,6 +253,11 @@
         
         audioPlayer.play();
         startProgressTracking();
+        
+        // Start refresh polling for processing items
+        if (item.status === 'processing') {
+          startRefreshPolling(item);
+        }
       }
 
       function startProgressTracking() {
@@ -271,6 +277,41 @@
             });
           }
         }, 2000);
+      }
+
+      function startRefreshPolling(item) {
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Clear any existing refresh interval
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+        
+        // Poll every 3 seconds to refresh audio source for processing items
+        refreshInterval = setInterval(async () => {
+          if (currentPlayingId === item.id && !audioPlayer.paused) {
+            try {
+              // Check current status
+              const response = await fetch('/api/content');
+              const content = await response.json();
+              const currentItem = content.find(c => c.id === item.id);
+              
+              if (currentItem && currentItem.status === 'processing') {
+                // Refresh audio source to get more generated content
+                const currentTime = audioPlayer.currentTime;
+                audioPlayer.src = `/api/stream?id=${item.id}&t=${Date.now()}`;
+                audioPlayer.currentTime = currentTime;
+                audioPlayer.play();
+              } else {
+                // Stop polling if no longer processing
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+              }
+            } catch (error) {
+              console.error('Error refreshing audio:', error);
+            }
+          }
+        }, 3000);
       }
 
       function setupAudioEventListeners() {
@@ -326,9 +367,17 @@
         const progressText = contentItem.querySelector('.progress-text');
         
         if (item.status === 'processing') {
-          // Show listening progress if duration is available, otherwise generation progress
-          if (item.duration_seconds > 0) {
-            const progressPercent = Math.min(Math.round((item.listening_position_seconds / item.duration_seconds) * 100), 100);
+          // Estimate duration from text length if actual duration not available
+          let estimatedDuration = item.duration_seconds;
+          if (estimatedDuration <= 0 && item.body) {
+            // Rough estimate: 150 words per minute, 5 chars per word average
+            const charCount = item.body.length;
+            const estimatedWords = charCount / 5;
+            estimatedDuration = Math.round((estimatedWords / 150) * 60); // seconds
+          }
+          
+          if (estimatedDuration > 0) {
+            const progressPercent = Math.min(Math.round((item.listening_position_seconds / estimatedDuration) * 100), 100);
             progressFill.style.width = `${progressPercent}%`;
             progressText.textContent = `${progressPercent}%`;
           } else {
