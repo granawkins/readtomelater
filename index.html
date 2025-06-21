@@ -280,6 +280,9 @@
       }
 
       fetchContent();
+      
+      // Refresh content every 2 seconds to show processing status updates
+      setInterval(fetchContent, 2000);
     </script>
   </body>
 </html>
