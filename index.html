@@ -287,7 +287,7 @@
           clearInterval(refreshInterval);
         }
         
-        // Poll every 3 seconds to refresh audio source for processing items
+        // Poll every 2 seconds to check if we need to refresh for more content
         refreshInterval = setInterval(async () => {
           if (currentPlayingId === item.id && !audioPlayer.paused) {
             try {
@@ -297,11 +297,18 @@
               const currentItem = content.find(c => c.id === item.id);
               
               if (currentItem && currentItem.status === 'processing') {
-                // Refresh audio source to get more generated content
+                // Only refresh if we're near the end of currently loaded content
                 const currentTime = audioPlayer.currentTime;
-                audioPlayer.src = `/api/stream?id=${item.id}&t=${Date.now()}`;
-                audioPlayer.currentTime = currentTime;
-                audioPlayer.play();
+                const loadedDuration = audioPlayer.duration || 0;
+                const timeUntilEnd = loadedDuration - currentTime;
+                
+                // Refresh when less than 5 seconds of content remaining
+                if (timeUntilEnd < 5 && timeUntilEnd > 0) {
+                  console.log(`Refreshing audio source - ${timeUntilEnd.toFixed(1)}s remaining`);
+                  audioPlayer.src = `/api/stream?id=${item.id}&t=${Date.now()}`;
+                  audioPlayer.currentTime = currentTime;
+                  audioPlayer.play();
+                }
               } else {
                 // Stop polling if no longer processing
                 clearInterval(refreshInterval);
@@ -311,7 +318,7 @@
               console.error('Error refreshing audio:', error);
             }
           }
-        }, 3000);
+        }, 2000);
       }
 
       function setupAudioEventListeners() {
