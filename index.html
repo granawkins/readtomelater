@@ -221,15 +221,70 @@
         })
       }
 
+      let currentPlayingId = null;
+      let progressSaveInterval = null;
+
       function handleClickContent(item) {
         const audioPlayer = document.getElementById('audioPlayer');
         const audioContainer = document.getElementById('audioContainer');
         const currentlyPlaying = document.getElementById('currentlyPlaying');
         
+        currentPlayingId = item.id;
         audioContainer.style.display = 'block';
         currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
+        
+        // Set up progress tracking
+        audioPlayer.addEventListener('loadedmetadata', () => {
+          // Resume from saved position
+          if (item.listening_position_seconds > 0) {
+            audioPlayer.currentTime = item.listening_position_seconds;
+          }
+        }, { once: true });
+        
         audioPlayer.play();
+        startProgressTracking();
+      }
+
+      function startProgressTracking() {
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Clear any existing interval
+        if (progressSaveInterval) {
+          clearInterval(progressSaveInterval);
+        }
+        
+        // Save progress every 5 seconds while playing
+        progressSaveInterval = setInterval(() => {
+          if (currentPlayingId && !audioPlayer.paused && audioPlayer.currentTime > 0) {
+            fetch('/api/progress', {
+              method: 'POST',
+              body: JSON.stringify({ id: currentPlayingId, position: audioPlayer.currentTime })
+            });
+          }
+        }, 5000);
+        
+        // Stop tracking when audio ends or pauses
+        audioPlayer.addEventListener('pause', () => {
+          if (progressSaveInterval) {
+            clearInterval(progressSaveInterval);
+            progressSaveInterval = null;
+          }
+        });
+        
+        audioPlayer.addEventListener('ended', () => {
+          if (progressSaveInterval) {
+            clearInterval(progressSaveInterval);
+            progressSaveInterval = null;
+          }
+          // Reset position when finished
+          if (currentPlayingId) {
+            fetch('/api/progress', {
+              method: 'POST',
+              body: JSON.stringify({ id: currentPlayingId, position: 0 })
+            });
+          }
+        });
       }
 
       function createContentItem(item) {
@@ -254,12 +309,25 @@
         const urlLink = contentItem.querySelector('.url-link');
         urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
         
-        // Progress
+        // Progress - show generation progress when processing, listening progress when completed
         const progressFill = contentItem.querySelector('.progress-fill');
         const progressText = contentItem.querySelector('.progress-text');
-        const progressPercent = Math.round(item.progress || 0);
-        progressFill.style.width = `${progressPercent}%`;
-        progressText.textContent = `${progressPercent}%`;
+        
+        if (item.status === 'processing') {
+          const progressPercent = Math.round(item.progress || 0);
+          progressFill.style.width = `${progressPercent}%`;
+          progressText.textContent = `${progressPercent}%`;
+        } else if (item.status === 'completed') {
+          // Show listening progress as percentage of total duration
+          // For now just show if started (position > 0)
+          const hasStarted = item.listening_position_seconds > 0;
+          const progressPercent = hasStarted ? 50 : 0; // Placeholder - would need duration for real percentage
+          progressFill.style.width = `${progressPercent}%`;
+          progressText.textContent = hasStarted ? 'Started' : 'Ready';
+        } else {
+          progressFill.style.width = '0%';
+          progressText.textContent = item.status;
+        }
         
         contentItem.addEventListener('click', () => handleClickContent(item));
 

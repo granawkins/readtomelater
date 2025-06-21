@@ -15,7 +15,10 @@ db.run(`
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
     progress INTEGER DEFAULT 0,
-    content_url TEXT DEFAULT NULL
+    content_url TEXT DEFAULT NULL,
+    generation_chunks_completed INTEGER DEFAULT 0,
+    generation_total_chunks INTEGER DEFAULT 0,
+    listening_position_seconds INTEGER DEFAULT 0
   )
 `);
 
@@ -37,6 +40,21 @@ export const updateContentStatus = (id, status, progress = 0) => {
   return db.run(
     "UPDATE content SET status = ?, progress = ? WHERE id = ?",
     [status, progress, id]
+  );
+};
+
+export const updateGenerationProgress = (id, chunksCompleted, totalChunks) => {
+  const progress = totalChunks > 0 ? Math.round((chunksCompleted / totalChunks) * 100) : 0;
+  return db.run(
+    "UPDATE content SET generation_chunks_completed = ?, generation_total_chunks = ?, progress = ? WHERE id = ?",
+    [chunksCompleted, totalChunks, progress, id]
+  );
+};
+
+export const updateListeningPosition = (id, positionSeconds) => {
+  return db.run(
+    "UPDATE content SET listening_position_seconds = ? WHERE id = ?",
+    [positionSeconds, id]
   );
 };
 

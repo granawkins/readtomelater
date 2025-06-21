@@ -1,6 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
-import { insertContent, updateContentStatus } from './database.js';
+import { insertContent, updateContentStatus, updateGenerationProgress } from './database.js';
 import fs from 'fs';
 import OpenAI from 'openai';
 import { createHash } from 'crypto';
@@ -46,29 +46,53 @@ async function getUrlContent(url) {
 
 async function generateAndWriteFile(text, filename, contentId) {
     console.log(`streaming from ${filename} for ${contentId}`)
-    // Skip if file already exists
+    
+    const textChunks = splitTextIntoChunks(text);
+    const totalChunks = textChunks.length;
+    
+    // Check if file already exists and is complete
     if (fs.existsSync(filename)) {
-        console.log(`File ${filename} already exists`);
-        updateContentStatus(contentId, 'completed');
-        return;
+        const stats = fs.statSync(filename);
+        if (stats.size > 0) {
+            // File exists with content - assume it's complete
+            console.log(`File ${filename} already exists`);
+            updateGenerationProgress(contentId, totalChunks, totalChunks);
+            updateContentStatus(contentId, 'completed');
+            return;
+        }
     }
     
     try {
-        // Update status to processing when we start generation
+        // Update status and initialize progress tracking
         updateContentStatus(contentId, 'processing');
+        updateGenerationProgress(contentId, 0, totalChunks);
         
-        // Split into chunks, stream directly to file
-        const textChunks = splitTextIntoChunks(text);
-        const fileWriteStream = fs.createWriteStream(filename);
+        // Determine starting chunk (for resume capability)
+        let startChunk = 0;
+        if (fs.existsSync(filename)) {
+            // Estimate completed chunks based on file size
+            const stats = fs.statSync(filename);
+            const avgChunkSize = 50000; // Rough estimate of MP3 chunk size
+            startChunk = Math.floor(stats.size / avgChunkSize);
+            startChunk = Math.min(startChunk, totalChunks - 1);
+            console.log(`Resuming from chunk ${startChunk} of ${totalChunks}`);
+        }
+        
+        const fileWriteStream = fs.createWriteStream(filename, { flags: startChunk > 0 ? 'a' : 'w' });
     
-        for (const chunk of textChunks) {
+        for (let i = startChunk; i < totalChunks; i++) {
+            const chunk = textChunks[i];
             const audioStream = await openai.audio.speech.create({
                 model: 'gpt-4o-mini-tts', voice: 'nova', input: chunk, response_format: 'mp3',
             });
             for await (const part of audioStream.body) {
                 fileWriteStream.write(part);
             }
+            
+            // Update progress after each chunk
+            updateGenerationProgress(contentId, i + 1, totalChunks);
         }
+        
         fileWriteStream.end();
         updateContentStatus(contentId, 'completed');
     } catch (error) {
