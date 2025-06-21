@@ -54,6 +54,9 @@ async function generateAndWriteFile(text, filename, contentId) {
     }
     
     try {
+        // Update status to processing when we start generation
+        updateContentStatus(contentId, 'processing');
+        
         // Split into chunks, stream directly to file
         const textChunks = splitTextIntoChunks(text);
         const fileWriteStream = fs.createWriteStream(filename);

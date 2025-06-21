@@ -59,7 +59,12 @@
         const template = document.getElementById('content-item-template');
         const clone = template.content.cloneNode(true);
         const contentItem = clone.querySelector('.content-item');
-        contentItem.querySelector('.title').textContent = item.title;
+        
+        const title = item.title;
+        const status = item.status || 'pending';
+        const statusText = status === 'processing' ? ' (Processing...)' : status === 'pending' ? ' (Queued)' : '';
+        
+        contentItem.querySelector('.title').textContent = title + statusText;
         contentItem.addEventListener('click', () => handleClickContent(item));
 
         return clone;
@@ -79,6 +84,9 @@
       }
 
       fetchContent();
+      
+      // Refresh content every 2 seconds to show processing status updates
+      setInterval(fetchContent, 2000);
     </script>
   </body>
 </html>
