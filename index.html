@@ -326,11 +326,18 @@
         const progressText = contentItem.querySelector('.progress-text');
         
         if (item.status === 'processing') {
-          const progressPercent = item.generation_total_chunks > 0 
-            ? Math.round((item.generation_chunks_completed / item.generation_total_chunks) * 100)
-            : 0;
-          progressFill.style.width = `${progressPercent}%`;
-          progressText.textContent = `${progressPercent}%`;
+          // Show listening progress if duration is available, otherwise generation progress
+          if (item.duration_seconds > 0) {
+            const progressPercent = Math.min(Math.round((item.listening_position_seconds / item.duration_seconds) * 100), 100);
+            progressFill.style.width = `${progressPercent}%`;
+            progressText.textContent = `${progressPercent}%`;
+          } else {
+            const progressPercent = item.generation_total_chunks > 0 
+              ? Math.round((item.generation_chunks_completed / item.generation_total_chunks) * 100)
+              : 0;
+            progressFill.style.width = `${progressPercent}%`;
+            progressText.textContent = `${progressPercent}%`;
+          }
         } else if (item.status === 'completed') {
           // Use actual duration if available, otherwise estimate
           const durationSeconds = item.duration_seconds > 0 ? item.duration_seconds : 300; // 5 min default
