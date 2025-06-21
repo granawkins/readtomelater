@@ -7,7 +7,9 @@ const server = Bun.serve({
     const url = new URL(req.url);
 
     if (url.pathname === '/') {
-      return new Response(Bun.file('index.html'));
+      return new Response(Bun.file('index.html'), {
+        headers: { 'Content-Type': 'text/html' }
+      });
     }
 
     if (url.pathname === '/api/add-article') {
