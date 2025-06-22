@@ -147,11 +147,6 @@
         transition: width 0.3s ease;
       }
       
-      .progress-text {
-        font-size: 11px;
-        color: #666;
-        min-width: 30px;
-      }
       
       #audioContainer {
         position: fixed;
@@ -230,13 +225,13 @@
           <div class="progress-bar">
             <div class="progress-fill"></div>
           </div>
-          <div class="progress-text"></div>
         </div>
       </div>
     </template>
 
     <script>
       let currentlyPlayingId = null;
+      let progressInterval = null;
 
       function submitUrl(event) {
         event.preventDefault();
@@ -261,13 +256,62 @@
         audioContainer.style.display = 'block';
         currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
-        audioPlayer.play();
+        
+        audioPlayer.addEventListener('loadedmetadata', () => {
+          if (item.seconds_listened && item.seconds_listened > 0) {
+            audioPlayer.currentTime = item.seconds_listened;
+          }
+          audioPlayer.play();
+        }, { once: true });
+        
+        audioPlayer.addEventListener('ended', () => {
+          if (currentlyPlayingId) {
+            fetch('/api/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentlyPlayingId,
+                seconds: item.seconds_total
+              }),
+            });
+          }
+        }, { once: true });
+        
+        startProgressTracking();
+      }
+
+      function startProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
+        
+        progressInterval = setInterval(() => {
+          const audioPlayer = document.getElementById('audioPlayer');
+          if (currentlyPlayingId && !audioPlayer.paused && audioPlayer.currentTime) {
+            fetch('/api/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentlyPlayingId,
+                seconds: audioPlayer.currentTime
+              }),
+            });
+          }
+        }, 2000);
+      }
+
+      function stopProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
       }
 
       function closeAudioPlayer() {
         const audioPlayer = document.getElementById('audioPlayer');
         const audioContainer = document.getElementById('audioContainer');
         
+        stopProgressTracking();
         audioPlayer.pause();
         audioPlayer.src = '';
         audioContainer.style.display = 'none';
@@ -313,10 +357,13 @@
         
         // Progress
         const progressFill = contentItem.querySelector('.progress-fill');
-        const progressText = contentItem.querySelector('.progress-text');
-        const progressPercent = Math.round(item.progress || 0);
-        progressFill.style.width = `${progressPercent}%`;
-        progressText.textContent = `${progressPercent}%`;
+        
+        if (item.seconds_total > 0) {
+          const progressPercent = Math.round((item.seconds_listened / item.seconds_total) * 100);
+          progressFill.style.width = `${progressPercent}%`;
+        } else {
+          progressFill.style.width = '0%';
+        }
         
         contentItem.addEventListener('click', () => handleClickContent(item));
 
