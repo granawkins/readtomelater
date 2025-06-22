@@ -47,7 +47,7 @@ export const getContent = (id) => {
 };
 
 export const getAllContent = () => {
-  return db.query("SELECT * FROM content").all();
+  return db.query("SELECT * FROM content ORDER BY created_at DESC").all();
 };
 
 // Close the database connection when the process exits
