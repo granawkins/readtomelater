@@ -1,6 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
-import { insertContent, updateContentStatus } from './database.js';
+import { insertContent, updateContentStatus, updateChunksGenerated } from './database.js';
 import fs from 'fs';
 import OpenAI from 'openai';
 import { createHash } from 'crypto';
@@ -60,7 +60,8 @@ async function generateAndWriteFile(text, filename, contentId) {
         // Split into chunks, stream directly to file
         const textChunks = splitTextIntoChunks(text);
         const fileWriteStream = fs.createWriteStream(filename);
-    
+        
+        let chunksGenerated = 0;
         for (const chunk of textChunks) {
             const audioStream = await openai.audio.speech.create({
                 model: 'gpt-4o-mini-tts', voice: 'nova', input: chunk, response_format: 'mp3',
@@ -68,6 +69,8 @@ async function generateAndWriteFile(text, filename, contentId) {
             for await (const part of audioStream.body) {
                 fileWriteStream.write(part);
             }
+            chunksGenerated++;
+            updateChunksGenerated(contentId, chunksGenerated);
         }
         fileWriteStream.end();
         updateContentStatus(contentId, 'completed');

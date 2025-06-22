@@ -237,6 +237,7 @@
 
     <script>
       let currentlyPlayingId = null;
+      let progressInterval = null;
 
       function submitUrl(event) {
         event.preventDefault();
@@ -261,13 +262,49 @@
         audioContainer.style.display = 'block';
         currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
-        audioPlayer.play();
+        
+        audioPlayer.addEventListener('loadedmetadata', () => {
+          if (item.seconds_listened && item.seconds_listened > 0) {
+            audioPlayer.currentTime = item.seconds_listened;
+          }
+          audioPlayer.play();
+        }, { once: true });
+        
+        startProgressTracking();
+      }
+
+      function startProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
+        
+        progressInterval = setInterval(() => {
+          const audioPlayer = document.getElementById('audioPlayer');
+          if (currentlyPlayingId && !audioPlayer.paused && audioPlayer.currentTime) {
+            fetch('/api/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentlyPlayingId,
+                seconds: audioPlayer.currentTime
+              }),
+            });
+          }
+        }, 2000);
+      }
+
+      function stopProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
       }
 
       function closeAudioPlayer() {
         const audioPlayer = document.getElementById('audioPlayer');
         const audioContainer = document.getElementById('audioContainer');
         
+        stopProgressTracking();
         audioPlayer.pause();
         audioPlayer.src = '';
         audioContainer.style.display = 'none';
@@ -311,12 +348,23 @@
         const urlLink = contentItem.querySelector('.url-link');
         urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
         
-        // Progress
+        // Progress - show seconds listened or chunks generated for processing items
         const progressFill = contentItem.querySelector('.progress-fill');
         const progressText = contentItem.querySelector('.progress-text');
-        const progressPercent = Math.round(item.progress || 0);
-        progressFill.style.width = `${progressPercent}%`;
-        progressText.textContent = `${progressPercent}%`;
+        
+        if (item.status === 'processing') {
+          const chunksGenerated = item.chunks_generated || 0;
+          progressText.textContent = `${chunksGenerated} chunks`;
+          progressFill.style.width = '50%';
+        } else if (item.seconds_listened && item.seconds_listened > 0) {
+          const minutes = Math.floor(item.seconds_listened / 60);
+          const seconds = item.seconds_listened % 60;
+          progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          progressFill.style.width = '30%';
+        } else {
+          progressText.textContent = '0:00';
+          progressFill.style.width = '0%';
+        }
         
         contentItem.addEventListener('click', () => handleClickContent(item));
 

@@ -14,10 +14,25 @@ db.run(`
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
-    progress INTEGER DEFAULT 0,
+    seconds_listened INTEGER DEFAULT 0,
+    chunks_generated INTEGER DEFAULT 0,
     content_url TEXT DEFAULT NULL
   )
 `);
+
+// Migrate existing data if progress column exists
+try {
+  db.run(`ALTER TABLE content ADD COLUMN seconds_listened INTEGER DEFAULT 0`);
+  db.run(`ALTER TABLE content ADD COLUMN chunks_generated INTEGER DEFAULT 0`);
+} catch (e) {
+  // Columns already exist, ignore
+}
+
+try {
+  db.run(`ALTER TABLE content DROP COLUMN progress`);
+} catch (e) {
+  // Column doesn't exist or can't be dropped, ignore
+}
 
 // Helper functions for common operations
 export const insertContent = (sourceUrl, title, body, contentUrl) => {
@@ -33,10 +48,24 @@ export const insertContent = (sourceUrl, title, body, contentUrl) => {
   }
 };
 
-export const updateContentStatus = (id, status, progress = 0) => {
+export const updateContentStatus = (id, status) => {
   return db.run(
-    "UPDATE content SET status = ?, progress = ? WHERE id = ?",
-    [status, progress, id]
+    "UPDATE content SET status = ? WHERE id = ?",
+    [status, id]
+  );
+};
+
+export const updateSecondsListened = (id, seconds) => {
+  return db.run(
+    "UPDATE content SET seconds_listened = ? WHERE id = ?",
+    [seconds, id]
+  );
+};
+
+export const updateChunksGenerated = (id, chunks) => {
+  return db.run(
+    "UPDATE content SET chunks_generated = ? WHERE id = ?",
+    [chunks, id]
   );
 };
 
