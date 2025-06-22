@@ -60,8 +60,11 @@ async function generateAndWriteFile(text, filename, contentId) {
         // Split into chunks, stream directly to file
         const textChunks = splitTextIntoChunks(text);
         const fileWriteStream = fs.createWriteStream(filename);
+        const totalChars = text.length;
         
         let chunksGenerated = 0;
+        let charsProcessed = 0;
+        
         for (const chunk of textChunks) {
             const audioStream = await openai.audio.speech.create({
                 model: 'gpt-4o-mini-tts', voice: 'nova', input: chunk, response_format: 'mp3',
@@ -70,7 +73,13 @@ async function generateAndWriteFile(text, filename, contentId) {
                 fileWriteStream.write(part);
             }
             chunksGenerated++;
-            updateChunksGenerated(contentId, chunksGenerated);
+            charsProcessed += chunk.length;
+            
+            // Get current file size and estimate total duration
+            const currentFileSize = fs.statSync(filename).size;
+            const estimatedTotalSeconds = Math.ceil((currentFileSize / charsProcessed) * totalChars / 1000);
+            
+            updateChunksGenerated(contentId, chunksGenerated, estimatedTotalSeconds);
         }
         fileWriteStream.end();
         updateContentStatus(contentId, 'completed');

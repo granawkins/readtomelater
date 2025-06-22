@@ -348,7 +348,7 @@
         const urlLink = contentItem.querySelector('.url-link');
         urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
         
-        // Progress - show seconds listened or chunks generated for processing items
+        // Progress
         const progressFill = contentItem.querySelector('.progress-fill');
         const progressText = contentItem.querySelector('.progress-text');
         
@@ -356,11 +356,15 @@
           const chunksGenerated = item.chunks_generated || 0;
           progressText.textContent = `${chunksGenerated} chunks`;
           progressFill.style.width = '50%';
-        } else if (item.seconds_listened && item.seconds_listened > 0) {
-          const minutes = Math.floor(item.seconds_listened / 60);
-          const seconds = item.seconds_listened % 60;
-          progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-          progressFill.style.width = '30%';
+        } else if (item.seconds_total > 0) {
+          const listenedMinutes = Math.floor(item.seconds_listened / 60);
+          const listenedSeconds = item.seconds_listened % 60;
+          const totalMinutes = Math.floor(item.seconds_total / 60);
+          const totalSeconds = item.seconds_total % 60;
+          const progressPercent = item.seconds_total > 0 ? Math.round((item.seconds_listened / item.seconds_total) * 100) : 0;
+          
+          progressText.textContent = `${listenedMinutes}:${listenedSeconds.toString().padStart(2, '0')} / ${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}`;
+          progressFill.style.width = `${progressPercent}%`;
         } else {
           progressText.textContent = '0:00';
           progressFill.style.width = '0%';

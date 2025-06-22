@@ -15,33 +15,21 @@ db.run(`
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
     seconds_listened INTEGER DEFAULT 0,
+    seconds_total INTEGER DEFAULT 0,
     chunks_generated INTEGER DEFAULT 0,
     content_url TEXT DEFAULT NULL
   )
 `);
 
-// Migrate existing data if progress column exists
-try {
-  db.run(`ALTER TABLE content ADD COLUMN seconds_listened INTEGER DEFAULT 0`);
-  db.run(`ALTER TABLE content ADD COLUMN chunks_generated INTEGER DEFAULT 0`);
-} catch (e) {
-  // Columns already exist, ignore
-}
-
-try {
-  db.run(`ALTER TABLE content DROP COLUMN progress`);
-} catch (e) {
-  // Column doesn't exist or can't be dropped, ignore
-}
-
 // Helper functions for common operations
 export const insertContent = (sourceUrl, title, body, contentUrl) => {
   try {
+    const estimatedSeconds = Math.ceil(body.length / 25);
     return db.prepare(`
-      INSERT INTO content (source_url, title, body, content_url) 
-      VALUES (?, ?, ?, ?)
+      INSERT INTO content (source_url, title, body, content_url, seconds_total) 
+      VALUES (?, ?, ?, ?, ?)
       RETURNING *
-    `).get(sourceUrl, title, body, contentUrl);
+    `).get(sourceUrl, title, body, contentUrl, estimatedSeconds);
   } catch (error) {
     console.error('Error inserting content:', error);
     throw error;
@@ -62,10 +50,10 @@ export const updateSecondsListened = (id, seconds) => {
   );
 };
 
-export const updateChunksGenerated = (id, chunks) => {
+export const updateChunksGenerated = (id, chunks, secondsTotal) => {
   return db.run(
-    "UPDATE content SET chunks_generated = ? WHERE id = ?",
-    [chunks, id]
+    "UPDATE content SET chunks_generated = ?, seconds_total = ? WHERE id = ?",
+    [chunks, secondsTotal, id]
   );
 };
 
