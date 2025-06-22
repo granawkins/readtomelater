@@ -22,14 +22,13 @@ db.run(`
 `);
 
 // Helper functions for common operations
-export const insertContent = (sourceUrl, title, body, contentUrl) => {
+export const insertContent = (sourceUrl, title, body, contentUrl, secondsTotal) => {
   try {
-    const estimatedSeconds = Math.ceil(body.length / 25);
     return db.prepare(`
       INSERT INTO content (source_url, title, body, content_url, seconds_total) 
       VALUES (?, ?, ?, ?, ?)
       RETURNING *
-    `).get(sourceUrl, title, body, contentUrl, estimatedSeconds);
+    `).get(sourceUrl, title, body, contentUrl, secondsTotal);
   } catch (error) {
     console.error('Error inserting content:', error);
     throw error;
