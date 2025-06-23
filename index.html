@@ -388,6 +388,27 @@
                 document.getElementById('authSuccess').textContent = 'Registration successful! Please check your email to verify your account.';
                 document.getElementById('authSuccess').style.display = 'block';
                 document.getElementById('authError').style.display = 'none';
+                
+                // Start polling to check if email gets verified
+                const pollForVerification = setInterval(async () => {
+                  try {
+                    const authResponse = await fetch('/auth/me');
+                    if (authResponse.ok) {
+                      const authData = await authResponse.json();
+                      currentUser = authData.user;
+                      document.getElementById('userEmail').textContent = currentUser.email;
+                      document.getElementById('userInfo').style.display = 'flex';
+                      document.getElementById('authModal').style.display = 'none';
+                      clearInterval(pollForVerification);
+                      fetchContent();
+                    }
+                  } catch (error) {
+                    console.error('Verification polling failed:', error);
+                  }
+                }, 2000);
+                
+                // Stop polling after 10 minutes
+                setTimeout(() => clearInterval(pollForVerification), 600000);
               }
             }
           } else {

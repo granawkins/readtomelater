@@ -82,8 +82,8 @@ export const updateChunksGenerated = (id, chunks, secondsTotal) => {
   );
 };
 
-export const getContent = (id, userId) => {
-  const result = db.prepare("SELECT * FROM content WHERE id = ? AND user_id = ?").get(id, userId);
+export const getContent = (id) => {
+  const result = db.prepare("SELECT * FROM content WHERE id = ?").get(id);
   console.log(`Getting content for ${id}: ${result}`);
   return result;
 };

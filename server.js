@@ -228,8 +228,8 @@ const server = Bun.serve({
         }
 
         const id = url.searchParams.get('id');
-        const content = getContent(id, user.id);
-        if (!content) {
+        const content = getContent(id);
+        if (!content || content.user_id !== user.id) {
           return new Response('Not found', { status: 404 });
         }
         
