@@ -22,10 +22,26 @@
         gap: 20px;
       }
       
+      #header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
       h1 {
         margin: 0;
-        text-align: center;
         color: #333;
+      }
+      
+      #userInfo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+      }
+      
+      #userEmail {
+        color: #666;
       }
       
       form {
@@ -198,11 +214,89 @@
       #audioPlayer {
         width: 100%;
       }
+      
+      #authModal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      
+      #authForm {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        max-width: 400px;
+        width: 90%;
+      }
+      
+      #authForm h2 {
+        margin-top: 0;
+        text-align: center;
+      }
+      
+      #authForm input {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        font-size: 16px;
+        box-sizing: border-box;
+      }
+      
+      #authForm button {
+        width: 100%;
+        padding: 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        margin-bottom: 10px;
+      }
+      
+      #authForm button:hover {
+        background-color: #0056b3;
+      }
+      
+      #authForm .link {
+        text-align: center;
+        color: #007bff;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      
+      #authForm .link:hover {
+        text-decoration: underline;
+      }
+      
+      #authForm .error {
+        color: #dc3545;
+        margin-bottom: 15px;
+        font-size: 14px;
+      }
+      
+      #authForm .success {
+        color: #28a745;
+        margin-bottom: 15px;
+        font-size: 14px;
+      }
     </style>
   </head>
   <body>
     <div id="root">
-      <h1>Read To Me Later</h1>
+      <div id="header">
+        <h1>Read To Me Later</h1>
+        <div id="userInfo" style="display: none;">
+          <span id="userEmail"></span>
+          <button onclick="logout()">Logout</button>
+        </div>
+      </div>
       <form onsubmit="submitUrl(event)">
         <input type="url" id="urlInput" placeholder="Enter URL to read later" required>
         <button type="submit">Submit</button>
@@ -216,6 +310,25 @@
       <audio id="audioPlayer" controls>
         Your browser does not support the audio element.
       </audio>
+    </div>
+
+    <div id="authModal" style="display: none;">
+      <div id="authForm">
+        <h2 id="authTitle">Login</h2>
+        <div id="authError" class="error" style="display: none;"></div>
+        <div id="authSuccess" class="success" style="display: none;"></div>
+        <form onsubmit="handleAuth(event)">
+          <input type="email" id="authEmail" placeholder="Email" required>
+          <input type="password" id="authPassword" placeholder="Password" required>
+          <button type="submit" id="authSubmit">Login</button>
+        </form>
+        <div class="link" onclick="toggleAuthMode()" id="authToggle">
+          Don't have an account? Register
+        </div>
+        <div class="link" onclick="showForgotPassword()" id="forgotLink">
+          Forgot password?
+        </div>
+      </div>
     </div>
 
     <template id="content-item-template">
@@ -237,12 +350,128 @@
 
     <script>
       let currentlyPlayingId = null;
+      let currentUser = null;
+      let isLoginMode = true;
+
+      async function checkAuth() {
+        try {
+          const response = await fetch('/auth/me');
+          if (response.ok) {
+            const data = await response.json();
+            currentUser = data.user;
+            document.getElementById('userEmail').textContent = currentUser.email;
+            document.getElementById('userInfo').style.display = 'flex';
+            document.getElementById('authModal').style.display = 'none';
+            return true;
+          }
+        } catch (error) {
+          console.error('Auth check failed:', error);
+        }
+        
+        document.getElementById('authModal').style.display = 'flex';
+        return false;
+      }
+
+      function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        const title = document.getElementById('authTitle');
+        const submit = document.getElementById('authSubmit');
+        const toggle = document.getElementById('authToggle');
+        
+        if (isLoginMode) {
+          title.textContent = 'Login';
+          submit.textContent = 'Login';
+          toggle.textContent = "Don't have an account? Register";
+        } else {
+          title.textContent = 'Register';
+          submit.textContent = 'Register';
+          toggle.textContent = 'Already have an account? Login';
+        }
+        
+        document.getElementById('authError').style.display = 'none';
+        document.getElementById('authSuccess').style.display = 'none';
+      }
+
+      async function handleAuth(event) {
+        event.preventDefault();
+        
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPassword').value;
+        const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
+        
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok) {
+            if (isLoginMode) {
+              currentUser = data.user;
+              document.getElementById('userEmail').textContent = currentUser.email;
+              document.getElementById('userInfo').style.display = 'flex';
+              document.getElementById('authModal').style.display = 'none';
+              fetchContent();
+            } else {
+              if (data.needsVerification) {
+                document.getElementById('authSuccess').textContent = 'Registration successful! Please check your email to verify your account.';
+                document.getElementById('authSuccess').style.display = 'block';
+                document.getElementById('authError').style.display = 'none';
+              }
+            }
+          } else {
+            document.getElementById('authError').textContent = data.error;
+            document.getElementById('authError').style.display = 'block';
+            document.getElementById('authSuccess').style.display = 'none';
+          }
+        } catch (error) {
+          document.getElementById('authError').textContent = 'Network error. Please try again.';
+          document.getElementById('authError').style.display = 'block';
+        }
+      }
+
+      async function showForgotPassword() {
+        const email = prompt('Enter your email address:');
+        if (!email) return;
+        
+        try {
+          const response = await fetch('/auth/forgot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          
+          if (response.ok) {
+            alert('Password reset email sent! Check your inbox.');
+          } else {
+            alert('Error sending reset email. Please try again.');
+          }
+        } catch (error) {
+          alert('Network error. Please try again.');
+        }
+      }
+
+      async function logout() {
+        try {
+          await fetch('/auth/logout', { method: 'POST' });
+          currentUser = null;
+          document.getElementById('userInfo').style.display = 'none';
+          document.getElementById('authModal').style.display = 'flex';
+          document.getElementById('contentList').innerHTML = '';
+        } catch (error) {
+          console.error('Logout failed:', error);
+        }
+      }
 
       function submitUrl(event) {
         event.preventDefault();
         const url = document.getElementById('urlInput').value;
         fetch('/api/add-article', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url }),
         }).then(() => {
           document.getElementById('urlInput').value = '';
@@ -337,10 +566,17 @@
           })
       }
 
-      fetchContent();
+      // Initialize app
+      async function initApp() {
+        const isAuthenticated = await checkAuth();
+        if (isAuthenticated) {
+          fetchContent();
+          // Refresh content every 2 seconds to show processing status updates
+          setInterval(fetchContent, 2000);
+        }
+      }
       
-      // Refresh content every 2 seconds to show processing status updates
-      setInterval(fetchContent, 2000);
+      initApp();
     </script>
   </body>
 </html>

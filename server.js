@@ -1,5 +1,6 @@
 import { getAllContent, getContent } from './database.js';
 import { processUrl } from './processing.js';
+import { registerUser, loginUser, verifyEmailToken, forgotPassword, resetPassword, authMiddleware } from './auth.js';
 
 const server = Bun.serve({
   port: 3000,
@@ -12,11 +13,160 @@ const server = Bun.serve({
       });
     }
 
+    // Auth endpoints
+    if (url.pathname === '/auth/register') {
+      const { email, password } = await req.json();
+      try {
+        const result = await registerUser(email, password);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/auth/login') {
+      const { email, password } = await req.json();
+      try {
+        const result = await loginUser(email, password);
+        const response = new Response(JSON.stringify({ user: result.user }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+        response.headers.set('Set-Cookie', `auth=${result.token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}`);
+        return response;
+      } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/auth/verify') {
+      const token = url.searchParams.get('token');
+      try {
+        const result = await verifyEmailToken(token);
+        const response = new Response(`
+          <html><body>
+            <h1>Email verified successfully!</h1>
+            <p>You can now close this tab and return to the app.</p>
+            <script>window.close();</script>
+          </body></html>
+        `, {
+          headers: { 'Content-Type': 'text/html' }
+        });
+        response.headers.set('Set-Cookie', `auth=${result.token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}`);
+        return response;
+      } catch (error) {
+        return new Response(`
+          <html><body>
+            <h1>Verification failed</h1>
+            <p>${error.message}</p>
+          </body></html>
+        `, {
+          status: 400,
+          headers: { 'Content-Type': 'text/html' }
+        });
+      }
+    }
+
+    if (url.pathname === '/auth/forgot') {
+      const { email } = await req.json();
+      try {
+        const result = await forgotPassword(email);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/auth/reset') {
+      const token = url.searchParams.get('token');
+      if (req.method === 'GET') {
+        return new Response(`
+          <html><body>
+            <h1>Reset Password</h1>
+            <form method="POST">
+              <input type="password" name="password" placeholder="New password" required>
+              <button type="submit">Reset Password</button>
+            </form>
+          </body></html>
+        `, {
+          headers: { 'Content-Type': 'text/html' }
+        });
+      }
+      
+      if (req.method === 'POST') {
+        const formData = await req.formData();
+        const password = formData.get('password');
+        try {
+          await resetPassword(token, password);
+          return new Response(`
+            <html><body>
+              <h1>Password reset successfully!</h1>
+              <p>You can now close this tab and login with your new password.</p>
+            </body></html>
+          `, {
+            headers: { 'Content-Type': 'text/html' }
+          });
+        } catch (error) {
+          return new Response(`
+            <html><body>
+              <h1>Reset failed</h1>
+              <p>${error.message}</p>
+            </body></html>
+          `, {
+            status: 400,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
+      }
+    }
+
+    if (url.pathname === '/auth/logout') {
+      const response = new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      response.headers.set('Set-Cookie', 'auth=; HttpOnly; Path=/; Max-Age=0');
+      return response;
+    }
+
+    if (url.pathname === '/auth/me') {
+      const user = authMiddleware(req);
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ user: { id: user.id, email: user.email } }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Protected endpoints
     if (url.pathname === '/api/add-article') {
+      const user = authMiddleware(req);
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       const { url: sourceUrl } = await req.json();
       
       try {
-        const item = await processUrl(sourceUrl);
+        const item = await processUrl(user.id, sourceUrl);
         return new Response(JSON.stringify(item), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -30,8 +180,16 @@ const server = Bun.serve({
     }
 
     if (url.pathname === '/api/content') {
+      const user = authMiddleware(req);
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       try {
-        const content = getAllContent();
+        const content = getAllContent(user.id);
         return new Response(JSON.stringify(content), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -45,8 +203,20 @@ const server = Bun.serve({
     }
 
     if (url.pathname.startsWith(`/api/stream`)) {
+        const user = authMiddleware(req);
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
         const id = url.searchParams.get('id');
-        const content = getContent(id);        
+        const content = getContent(id, user.id);
+        if (!content) {
+          return new Response('Not found', { status: 404 });
+        }
+        
         const file = Bun.file(content.content_url);
         const fileSize = Number(await file.size);
         
