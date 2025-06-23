@@ -17,13 +17,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function processUrl(sourceUrl) {
+export async function processUrl(userId, sourceUrl) {
     // Get text and add to database
     const content = await getUrlContent(sourceUrl);
     const hash = createHash('sha256').update(sourceUrl).digest('hex');
     const contentUrl = `${AUDIO_DIR}/${hash}.mp3`;
     const estimatedSeconds = Math.ceil(content.body.length / CHARS_PER_SECOND);
-    const item = insertContent(sourceUrl, content.title, content.body, contentUrl, estimatedSeconds);
+    const item = insertContent(userId, sourceUrl, content.title, content.body, contentUrl, estimatedSeconds);
     console.log(item)
 
     // Generate in background
