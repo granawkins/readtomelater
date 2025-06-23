@@ -1,4 +1,4 @@
-import { getAllContent, getContent } from './database.js';
+import { getAllContent, getContent, updateSecondsListened } from './database.js';
 import { processUrl } from './processing.js';
 import { registerUser, loginUser, verifyEmailToken, forgotPassword, resetPassword, authMiddleware } from './auth.js';
 
@@ -195,6 +195,22 @@ const server = Bun.serve({
         });
       } catch (error) {
         console.error('Error fetching content:', error);
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/api/progress' && req.method === 'POST') {
+      try {
+        const { id, seconds } = await req.json();
+        updateSecondsListened(id, Math.floor(seconds));
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error updating progress:', error);
         return new Response(JSON.stringify({ success: false, error: error.message }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' }

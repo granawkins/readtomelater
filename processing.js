@@ -1,9 +1,12 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
-import { insertContent, updateContentStatus } from './database.js';
+import { insertContent, updateContentStatus, updateChunksGenerated } from './database.js';
 import fs from 'fs';
 import OpenAI from 'openai';
 import { createHash } from 'crypto';
+import { parseBuffer } from 'music-metadata';
+
+const CHARS_PER_SECOND = 16;
 
 export const AUDIO_DIR = './audio';
 if (!fs.existsSync(AUDIO_DIR)) {
@@ -19,7 +22,8 @@ export async function processUrl(userId, sourceUrl) {
     const content = await getUrlContent(sourceUrl);
     const hash = createHash('sha256').update(sourceUrl + userId).digest('hex');
     const contentUrl = `${AUDIO_DIR}/${hash}.mp3`;
-    const item = insertContent(userId, sourceUrl, content.title, content.body, contentUrl);
+    const estimatedSeconds = Math.ceil(content.body.length / CHARS_PER_SECOND);
+    const item = insertContent(userId, sourceUrl, content.title, content.body, contentUrl, estimatedSeconds);
     console.log(item)
 
     // Generate in background
@@ -60,7 +64,11 @@ async function generateAndWriteFile(text, filename, contentId) {
         // Split into chunks, stream directly to file
         const textChunks = splitTextIntoChunks(text);
         const fileWriteStream = fs.createWriteStream(filename);
-    
+        const totalChars = text.length;
+        
+        let chunksGenerated = 0;
+        let charsProcessed = 0;
+        
         for (const chunk of textChunks) {
             const audioStream = await openai.audio.speech.create({
                 model: 'gpt-4o-mini-tts', voice: 'nova', input: chunk, response_format: 'mp3',
@@ -68,8 +76,36 @@ async function generateAndWriteFile(text, filename, contentId) {
             for await (const part of audioStream.body) {
                 fileWriteStream.write(part);
             }
+            chunksGenerated++;
+            charsProcessed += chunk.length;
+            
+            // Get actual audio duration and estimate remaining time
+            try {
+                const fileBuffer = fs.readFileSync(filename);
+                const metadata = await parseBuffer(fileBuffer);
+                const actualDurationSoFar = metadata.format.duration || 0;
+                const estimatedTotalSeconds = Math.ceil((actualDurationSoFar / charsProcessed) * totalChars);
+                
+                updateChunksGenerated(contentId, chunksGenerated, estimatedTotalSeconds);
+            } catch (metadataError) {
+                // Fallback to character-based estimation
+                const remainingChars = totalChars - charsProcessed;
+                const estimatedTotalSeconds = Math.ceil(charsProcessed / CHARS_PER_SECOND) + Math.ceil(remainingChars / CHARS_PER_SECOND);
+                updateChunksGenerated(contentId, chunksGenerated, estimatedTotalSeconds);
+            }
         }
         fileWriteStream.end();
+        
+        // Get final duration
+        try {
+            const fileBuffer = fs.readFileSync(filename);
+            const metadata = await parseBuffer(fileBuffer);
+            const finalDuration = Math.ceil(metadata.format.duration || 0);
+            updateChunksGenerated(contentId, textChunks.length, finalDuration);
+        } catch (error) {
+            console.log('Could not get final duration, keeping estimate');
+        }
+        
         updateContentStatus(contentId, 'completed');
     } catch (error) {
         console.error('Error generating audio:', error);

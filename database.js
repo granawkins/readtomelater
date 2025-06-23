@@ -39,30 +39,46 @@ db.run(`
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
-    progress INTEGER DEFAULT 0,
+    seconds_listened INTEGER DEFAULT 0,
+    seconds_total INTEGER DEFAULT 0,
+    chunks_generated INTEGER DEFAULT 0,
     content_url TEXT DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )
 `);
 
 // Helper functions for common operations
-export const insertContent = (userId, sourceUrl, title, body, contentUrl) => {
+export const insertContent = (userId, sourceUrl, title, body, contentUrl, secondsTotal = 0) => {
   try {
     return db.prepare(`
-      INSERT INTO content (user_id, source_url, title, body, content_url) 
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO content (user_id, source_url, title, body, content_url, seconds_total) 
+      VALUES (?, ?, ?, ?, ?, ?)
       RETURNING *
-    `).get(userId, sourceUrl, title, body, contentUrl);
+    `).get(userId, sourceUrl, title, body, contentUrl, secondsTotal);
   } catch (error) {
     console.error('Error inserting content:', error);
     throw error;
   }
 };
 
-export const updateContentStatus = (id, status, progress = 0) => {
+export const updateContentStatus = (id, status) => {
   return db.run(
-    "UPDATE content SET status = ?, progress = ? WHERE id = ?",
-    [status, progress, id]
+    "UPDATE content SET status = ? WHERE id = ?",
+    [status, id]
+  );
+};
+
+export const updateSecondsListened = (id, seconds) => {
+  return db.run(
+    "UPDATE content SET seconds_listened = ? WHERE id = ?",
+    [seconds, id]
+  );
+};
+
+export const updateChunksGenerated = (id, chunks, secondsTotal) => {
+  return db.run(
+    "UPDATE content SET chunks_generated = ?, seconds_total = ? WHERE id = ?",
+    [chunks, secondsTotal, id]
   );
 };
 

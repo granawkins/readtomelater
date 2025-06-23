@@ -98,35 +98,9 @@
       }
       
       .meta {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-bottom: 8px;
         font-size: 12px;
         color: #666;
-      }
-      
-      .status {
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: bold;
-        text-transform: uppercase;
-      }
-      
-      .status.pending {
-        background-color: #fff3cd;
-        color: #856404;
-      }
-      
-      .status.completed {
-        background-color: #d4edda;
-        color: #155724;
-      }
-      
-      .status.error {
-        background-color: #f8d7da;
-        color: #721c24;
       }
       
       .url-link {
@@ -163,11 +137,6 @@
         transition: width 0.3s ease;
       }
       
-      .progress-text {
-        font-size: 11px;
-        color: #666;
-        min-width: 30px;
-      }
       
       #audioContainer {
         position: fixed;
@@ -336,14 +305,12 @@
         <div class="title"></div>
         <div class="meta">
           <div class="created-at"></div>
-          <div class="status"></div>
         </div>
         <div class="url-link"></div>
         <div class="progress-container">
           <div class="progress-bar">
             <div class="progress-fill"></div>
           </div>
-          <div class="progress-text"></div>
         </div>
       </div>
     </template>
@@ -352,6 +319,7 @@
       let currentlyPlayingId = null;
       let currentUser = null;
       let isLoginMode = true;
+      let progressInterval = null;
 
       async function checkAuth() {
         try {
@@ -490,13 +458,62 @@
         audioContainer.style.display = 'block';
         currentlyPlaying.textContent = `Now Playing: ${item.title}`;
         audioPlayer.src = `/api/stream?id=${item.id}`;
-        audioPlayer.play();
+        
+        audioPlayer.addEventListener('loadedmetadata', () => {
+          if (item.seconds_listened && item.seconds_listened > 0) {
+            audioPlayer.currentTime = item.seconds_listened;
+          }
+          audioPlayer.play();
+        }, { once: true });
+        
+        audioPlayer.addEventListener('ended', () => {
+          if (currentlyPlayingId) {
+            fetch('/api/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentlyPlayingId,
+                seconds: item.seconds_total
+              }),
+            });
+          }
+        }, { once: true });
+        
+        startProgressTracking();
+      }
+
+      function startProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
+        
+        progressInterval = setInterval(() => {
+          const audioPlayer = document.getElementById('audioPlayer');
+          if (currentlyPlayingId && !audioPlayer.paused && audioPlayer.currentTime) {
+            fetch('/api/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentlyPlayingId,
+                seconds: audioPlayer.currentTime
+              }),
+            });
+          }
+        }, 2000);
+      }
+
+      function stopProgressTracking() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
       }
 
       function closeAudioPlayer() {
         const audioPlayer = document.getElementById('audioPlayer');
         const audioContainer = document.getElementById('audioContainer');
         
+        stopProgressTracking();
         audioPlayer.pause();
         audioPlayer.src = '';
         audioContainer.style.display = 'none';
@@ -531,21 +548,19 @@
         contentItem.querySelector('.created-at').textContent = 
           createdAt.toLocaleDateString() + ' ' + createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        // Status
-        const statusEl = contentItem.querySelector('.status');
-        statusEl.textContent = item.status;
-        statusEl.className = `status ${item.status}`;
-        
         // URL link
         const urlLink = contentItem.querySelector('.url-link');
         urlLink.innerHTML = `<a href="${item.source_url}" target="_blank" onclick="event.stopPropagation()">${item.source_url}</a>`;
         
         // Progress
         const progressFill = contentItem.querySelector('.progress-fill');
-        const progressText = contentItem.querySelector('.progress-text');
-        const progressPercent = Math.round(item.progress || 0);
-        progressFill.style.width = `${progressPercent}%`;
-        progressText.textContent = `${progressPercent}%`;
+        
+        if (item.seconds_total > 0) {
+          const progressPercent = Math.round((item.seconds_listened / item.seconds_total) * 100);
+          progressFill.style.width = `${progressPercent}%`;
+        } else {
+          progressFill.style.width = '0%';
+        }
         
         contentItem.addEventListener('click', () => handleClickContent(item));
 
